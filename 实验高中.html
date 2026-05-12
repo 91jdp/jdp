@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实验高中 - 陈姝洁在等你</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a1a; overflow: hidden;
+  display: flex; justify-content: center; align-items: center;
+  height: 100vh;
+  font-family: 'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif;
+  user-select: none; -webkit-user-select: none;
+}
+canvas { display: block; cursor: pointer; }
+#toast {
+  position: fixed; top: 30px; left: 50%; transform: translateX(-50%);
+  color: #fff; font-size: 22px; font-weight: bold; pointer-events: none;
+  z-index: 50; opacity: 0; transition: all 0.3s;
+  font-family: 'Microsoft YaHei','PingFang SC',sans-serif;
+  text-shadow: 0 0 20px rgba(255,215,0,0.8);
+}
+#hint {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  color: #ffd700; font-size: 14px; pointer-events: none; opacity: 0.8;
+  text-align: center; font-family: 'Microsoft YaHei','PingFang SC',sans-serif; z-index: 10;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="toast"></div>
+<div id="hint"></div>
+<script>
+// ==================== 实验高中 · 陈姝洁在等你 ====================
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const hintEl = document.getElementById('hint');
+const toastEl = document.getElementById('toast');
+const W = 800, H = 800;
+canvas.width = W; canvas.height = H;
+
+function resize() {
+  const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+  canvas.style.width = W * scale + 'px';
+  canvas.style.height = H * scale + 'px';
+}
+resize(); window.addEventListener('resize', resize);
+
+function lx(x) { return (x + 2) / 4 * W; }
+function ly(y) { return (2 - y) / 4 * H; }
+function ls(s) { return s / 4 * W; }
+
+// ==================== 状态 ====================
+let scene = 0;
+// 0=校门,1=食堂,2=图书馆,3=操场,4=陈姝洁出场,5=终极抉择,6=庆祝
+let frame = 0;
+let sceneStartFrame = 0;
+let particles = [];
+let emojiRain = [];
+let sparkles = [];
+let pulseRings = [];
+let hearts = [];
+let confettiPieces = [];
+let btnNoX = 0.5, btnNoY = -0.9;
+const btnYesX = -0.45, btnYesY = -0.9;
+let totalAgrees = 0;
+let toastTimer = 0;
+let meteorShower = [];
+
+// 配色
+const PINK = '#ff6b9d';
+const PURPLE = '#7c4dff';
+const GOLD = '#ffd700';
+const CYAN = '#00e5ff';
+
+// ==================== 星空 ====================
+const stars = [];
+for (let i = 0; i < 130; i++) {
+  stars.push({
+    x: Math.random()*4-2, y: Math.random()*4-2,
+    size: Math.random()*2.5+0.3,
+    phase: Math.random()*Math.PI*2,
+    speed: Math.random()*0.04+0.01,
+    hue: [40, 280, 340, 200, 30][Math.floor(Math.random()*5)]
+  });
+}
+
+// ==================== 特效函数 ====================
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const a = Math.random()*Math.PI*2;
+    const s = Math.random()*0.09+0.025;
+    particles.push({
+      x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s,
+      life: 1, decay: Math.random()*0.022+0.01,
+      color, size: Math.random()*8+3
+    });
+  }
+  pulseRings.push({ x, y, r: 0.05, alpha: 1, color });
+}
+
+function spawnHeart(x, y) {
+  hearts.push({
+    x, y,
+    vy: Math.random()*0.04+0.02,
+    vx: (Math.random()-0.5)*0.03,
+    life: 1, decay: Math.random()*0.015+0.007,
+    size: Math.random()*0.1+0.05,
+    wobble: Math.random()*Math.PI*2
+  });
+}
+
+function spawnConfetti(count) {
+  for (let i=0;i<count;i++) {
+    confettiPieces.push({
+      x: Math.random()*3-1.5, y: 2.2,
+      vy: -(Math.random()*0.04+0.02),
+      vx: (Math.random()-0.5)*0.04,
+      life: 1, decay: Math.random()*0.02+0.008,
+      color: ['#ff6b9d','#ffd700','#7c4dff','#00e5ff','#ff8a80','#b388ff','#ffab91'][Math.floor(Math.random()*7)],
+      size: Math.random()*5+3,
+      rotation: Math.random()*Math.PI*2,
+      rotSpeed: (Math.random()-0.5)*0.3
+    });
+  }
+}
+
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.style.opacity = '1';
+  toastEl.style.transform = 'translateX(-50%) scale(1.1)';
+  setTimeout(() => {
+    toastEl.style.opacity = '0';
+    toastEl.style.transform = 'translateX(-50%) scale(0.9)';
+  }, 1200);
+}
+
+function hexRgba(h, a) {
+  const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// ==================== 按钮 ====================
+function drawFancyButton(x, y, w, h, text, color, alpha, glow) {
+  const bx=lx(x), by=ly(y), bw=ls(w), bh=ls(h);
+  if(glow>0){ctx.shadowColor=color;ctx.shadowBlur=ls(0.08)*glow;}
+  ctx.fillStyle=hexRgba(color,alpha);
+  ctx.beginPath();
+  const br=ls(0.035);
+  roundRect(bx-bw/2,by-bh/2,bw,bh,br);ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=ls(0.01);
+  roundRect(bx-bw/2,by-bh/2,bw,bh,br);ctx.stroke();
+  ctx.shadowBlur=0;
+  ctx.fillStyle='rgba(255,255,255,0.12)';
+  roundRect(bx-bw/2+ls(0.02),by+bh/2-ls(0.03),bw-ls(0.04),bh*0.32,ls(0.015));ctx.fill();
+  ctx.fillStyle='#fff';ctx.font=`bold ${ls(0.1)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+  ctx.textAlign='center';ctx.fillText(text,bx,by+ls(0.035));
+  return {x:bx,y:by,w:bw,h:bh};
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);
+  ctx.arcTo(x+w,y,x+w,y+r,r);ctx.lineTo(x+w,y+h-r);
+  ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);
+  ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);
+  ctx.arcTo(x,y,x+r,y,r);ctx.closePath();
+}
+
+// ==================== 陈姝洁 Q版形象 ====================
+function drawChenShujie(cx, cy, scale, expression) {
+  const sx=lx(cx), sy=ly(cy), s=ls(scale);
+  ctx.save();ctx.translate(sx,sy);
+
+  // 身体
+  const bodyGrd=ctx.createLinearGradient(0,-s*0.1,0,s*0.4);
+  bodyGrd.addColorStop(0,'#ff6b9d');bodyGrd.addColorStop(1,'#e91e63');
+  ctx.fillStyle=bodyGrd;
+  ctx.beginPath();ctx.ellipse(0,s*0.1,s*0.3,s*0.45,0,0,Math.PI*2);ctx.fill();
+
+  // 领结
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.moveTo(0,-s*0.05);ctx.lineTo(-s*0.08,s*0.02);ctx.lineTo(0,s*0.03);ctx.lineTo(s*0.08,s*0.02);ctx.closePath();ctx.fill();
+
+  // 腿
+  ctx.strokeStyle='#ffe0c0';ctx.lineWidth=s*0.13;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(-s*0.15,s*0.45);ctx.lineTo(-s*0.2,s*0.85);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(s*0.15,s*0.45);ctx.lineTo(s*0.2,s*0.85);ctx.stroke();
+
+  // 手臂 (挥手)
+  const armWave=Math.sin(frame*0.1)*s*0.1;
+  ctx.beginPath();ctx.moveTo(s*0.28,-s*0.05);ctx.lineTo(s*0.45,s*0.2+armWave);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-s*0.28,-s*0.05);ctx.lineTo(-s*0.4,s*0.35);ctx.stroke();
+
+  // 头
+  ctx.fillStyle='#ffe0c0';
+  ctx.beginPath();ctx.arc(0,-s*0.4,s*0.38,0,Math.PI*2);ctx.fill();
+
+  // 头发
+  ctx.fillStyle='#2c1810';
+  ctx.beginPath();ctx.arc(0,-s*0.47,s*0.41,Math.PI,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(0,-s*0.33,s*0.4,s*0.16,0,0,Math.PI*2);ctx.fill();
+  for(let sd=-1;sd<=1;sd+=2){
+    ctx.beginPath();ctx.ellipse(sd*s*0.33,-s*0.42,s*0.11,s*0.22,sd*0.3,0,Math.PI*2);ctx.fill();
+  }
+
+  // 发饰 - 蝴蝶结
+  ctx.fillStyle='#ff4081';
+  for(let b=-1;b<=1;b+=2){
+    ctx.beginPath();ctx.arc(b*s*0.26,-s*0.78,s*0.09,0,Math.PI*2);ctx.fill();
+  }
+  ctx.beginPath();ctx.arc(0,-s*0.75,s*0.05,0,Math.PI*2);ctx.fill();
+
+  // 眼睛
+  for(let e=-1;e<=1;e+=2){
+    ctx.fillStyle='#fff';
+    ctx.beginPath();ctx.arc(e*s*0.12,-s*0.45,s*0.1,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#222';
+    ctx.beginPath();ctx.arc(e*s*0.12,-s*0.44,s*0.055,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.beginPath();ctx.arc(e*s*0.105,-s*0.47,s*0.022,0,Math.PI*2);ctx.fill();
+  }
+
+  // 嘴巴
+  if(expression==='smile'){
+    ctx.strokeStyle='#e57373';ctx.lineWidth=s*0.025;ctx.beginPath();
+    ctx.arc(0,-s*0.32,s*0.07,0.1,Math.PI-0.1);ctx.stroke();
+  }else if(expression==='wink'){
+    ctx.strokeStyle='#e57373';ctx.lineWidth=s*0.025;ctx.beginPath();
+    ctx.arc(0,-s*0.31,s*0.07,0.1,Math.PI-0.1);ctx.stroke();
+    // 左眼眨眼
+    ctx.fillStyle='#ffe0c0';ctx.beginPath();ctx.arc(-s*0.12,-s*0.45,s*0.11,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#222';ctx.lineWidth=s*0.02;ctx.beginPath();
+    ctx.moveTo(-s*0.2,-s*0.45);ctx.lineTo(-s*0.04,-s*0.45);ctx.stroke();
+  }else{
+    ctx.fillStyle='#e57373';
+    ctx.beginPath();ctx.arc(0,-s*0.3,s*0.05,0,Math.PI);ctx.fill();
+  }
+
+  // 腮红
+  for(let bl=-1;bl<=1;bl+=2){
+    ctx.fillStyle='rgba(255,150,150,0.3)';
+    ctx.beginPath();ctx.arc(bl*s*0.2,-s*0.34,s*0.07,0,Math.PI*2);ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// ==================== 场景绘制函数 ====================
+function drawSceneTitle(title, sub, glowColor) {
+  ctx.textAlign='center';
+  for(let i=2;i>=0;i--){
+    const off=(i-1)*ls(0.005);
+    ctx.fillStyle=i===1?hexRgba(glowColor||GOLD,0.92):hexRgba(glowColor||GOLD,0.25);
+    ctx.font=`bold ${ls(0.24)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    if(i===1){ctx.shadowColor=hexRgba(glowColor||GOLD,0.5);ctx.shadowBlur=ls(0.08);}
+    else ctx.shadowBlur=0;
+    ctx.fillText(title,W/2+off,ly(1.25)+off);
+  }
+  ctx.shadowBlur=0;
+  if(sub){
+    ctx.fillStyle='rgba(255,255,255,0.7)';
+    ctx.font=`${ls(0.11)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText(sub,W/2,ly(1.0));
+  }
+}
+
+// ==================== 鼠标/触摸 ====================
+let mouseX=-999,mouseY=-999;
+canvas.addEventListener('mousemove',(e)=>{
+  const rect=canvas.getBoundingClientRect();
+  const sX=W/rect.width,sY=H/rect.height;
+  mouseX=((e.clientX-rect.left)*sX)/W*4-2;
+  mouseY=2-((e.clientY-rect.top)*sY)/H*4;
+  if(scene>=1&&scene<=5){
+    if(Math.abs(mouseX-btnNoX)<0.3&&Math.abs(mouseY-btnNoY)<0.15){
+      for(let i=0;i<50;i++){
+        const nx=Math.random()*1.6-0.8,ny=Math.random()*0.7-1.2;
+        if(Math.abs(nx-btnYesX)>0.45||Math.abs(ny-btnYesY)>0.2){btnNoX=nx;btnNoY=ny;break;}
+      }
+    }
+  }
+  if(Math.random()<0.2) sparkles.push({
+    x:mouseX+(Math.random()-0.5)*0.3,y:mouseY+(Math.random()-0.5)*0.3,
+    life:1,decay:Math.random()*0.04+0.02,size:Math.random()*3+1
+  });
+});
+
+canvas.addEventListener('click',(e)=>{
+  const rect=canvas.getBoundingClientRect();
+  const sX=W/rect.width,sY=H/rect.height;
+  const cx=((e.clientX-rect.left)*sX)/W*4-2;
+  const cy=2-((e.clientY-rect.top)*sY)/H*4;
+  spawnParticles(cx,cy,CYAN,8);
+  handleClick(cx,cy);
+});
+
+// 触摸
+canvas.addEventListener('touchmove',(e)=>{
+  e.preventDefault();
+  const rect=canvas.getBoundingClientRect();
+  const sX=W/rect.width,sY=H/rect.height;
+  mouseX=((e.touches[0].clientX-rect.left)*sX)/W*4-2;
+  mouseY=2-((e.touches[0].clientY-rect.top)*sY)/H*4;
+  if(scene>=1&&scene<=5){
+    if(Math.abs(mouseX-btnNoX)<0.32&&Math.abs(mouseY-btnNoY)<0.17){
+      for(let i=0;i<50;i++){const nx=Math.random()*1.6-0.8,ny=Math.random()*0.7-1.2;if(Math.abs(nx-btnYesX)>0.45||Math.abs(ny-btnYesY)>0.2){btnNoX=nx;btnNoY=ny;break;}}
+    }
+  }
+},{passive:false});
+canvas.addEventListener('touchend',(e)=>{
+  e.preventDefault();
+  const rect=canvas.getBoundingClientRect();
+  const sX=W/rect.width,sY=H/rect.height;
+  const cx=((e.changedTouches[0].clientX-rect.left)*sX)/W*4-2;
+  const cy=2-((e.changedTouches[0].clientY-rect.top)*sY)/H*4;
+  spawnParticles(cx,cy,CYAN,8);
+  handleClick(cx,cy);
+});
+
+function handleClick(cx,cy){
+  const age=frame-sceneStartFrame;
+  if(scene===0&&age>25){advanceScene();}
+  else if(scene>=1&&scene<=5){
+    if(Math.abs(cx-btnYesX)<0.3&&Math.abs(cy-btnYesY)<0.17){
+      totalAgrees++;spawnParticles(btnYesX,btnYesY,GOLD,35);spawnHeart(btnYesX,btnYesY);
+      showToast(scene===5?'🏆 陈姝洁：我就知道你会来！🏆':`🎁 第${totalAgrees}次心动！陈姝洁在实验高中等你！`);
+      spawnConfetti(40);
+      setTimeout(()=>advanceScene(),600);
+    }
+    if(Math.abs(cx-btnNoX)<0.3&&Math.abs(cy-btnNoY)<0.17){
+      spawnParticles(btnNoX,btnNoY,'#666',12);
+      showToast('🤣 拒绝无效！陈姝洁喊你来实验高中！');
+      btnNoX=Math.random()*1.6-0.8;btnNoY=Math.random()*0.7-1.2;
+    }
+  }else if(scene===6){spawnParticles(cx,cy,GOLD,15);spawnConfetti(20);}
+}
+
+function advanceScene(){
+  scene++;sceneStartFrame=frame;btnNoX=0.5;btnNoY=-0.9;
+  if(scene===6){spawnConfetti(80);spawnParticles(0,0.1,GOLD,50);}
+}
+
+// ==================== 主循环 ====================
+function render(){
+  frame++;
+
+  // 背景
+  const bgGrd=ctx.createRadialGradient(W/2,H/2,ls(0.1),W/2,H/2,ls(2.5));
+  if(scene===6){
+    bgGrd.addColorStop(0,'#2a1030');bgGrd.addColorStop(0.5,'#180a20');bgGrd.addColorStop(1,'#0a0510');
+  }else if(scene===4||scene===5){
+    bgGrd.addColorStop(0,'#1a1028');bgGrd.addColorStop(0.5,'#120a1e');bgGrd.addColorStop(1,'#080514');
+  }else{
+    bgGrd.addColorStop(0,'#0d1b30');bgGrd.addColorStop(0.5,'#091420');bgGrd.addColorStop(1,'#050a14');
+  }
+  ctx.fillStyle=bgGrd;ctx.fillRect(0,0,W,H);
+
+  // 流星雨
+  if(scene===4||scene===5){
+    if(Math.random()<0.03&&meteorShower.length<5){
+      meteorShower.push({
+        x:Math.random()*2-0.5,y:Math.random()*0.8+1,
+        vx:Math.cos(-0.25)*(Math.random()*0.05+0.03),
+        vy:Math.sin(-0.25)*(Math.random()*0.05+0.03),
+        life:1,decay:Math.random()*0.025+0.01,
+        length:Math.random()*0.3+0.15
+      });
+    }
+  }
+  for(let i=meteorShower.length-1;i>=0;i--){
+    const ms=meteorShower[i];ms.x+=ms.vx;ms.y+=ms.vy;ms.life-=ms.decay;
+    if(ms.life<=0){meteorShower.splice(i,1);continue;}
+    const gx=lx(ms.x),gy=ly(ms.y),tx=lx(ms.x-ms.vx*ms.length*10),ty=ly(ms.y-ms.vy*ms.length*10);
+    const lgrd=ctx.createLinearGradient(gx,gy,tx,ty);
+    lgrd.addColorStop(0,`rgba(255,200,255,${ms.life*0.8})`);lgrd.addColorStop(1,'rgba(200,150,255,0)');
+    ctx.strokeStyle=lgrd;ctx.lineWidth=ls(0.014);
+    ctx.beginPath();ctx.moveTo(gx,gy);ctx.lineTo(tx,ty);ctx.stroke();
+  }
+
+  // 星星
+  for(const s of stars){
+    const tw=0.25+0.75*Math.abs(Math.sin(frame*s.speed+s.phase));
+    ctx.fillStyle=`hsla(${s.hue},80%,75%,${0.55*tw})`;
+    ctx.beginPath();
+    ctx.arc(lx(s.x),ly(s.y),Math.max(0.3,ls(0.003)*s.size*tw),0,Math.PI*2);ctx.fill();
+  }
+
+  // 火花跟随
+  for(let i=sparkles.length-1;i>=0;i--){
+    const sp=sparkles[i];sp.life-=sp.decay;
+    if(sp.life<=0){sparkles.splice(i,1);continue;}
+    ctx.fillStyle=`rgba(255,255,220,${sp.life*0.7})`;
+    ctx.beginPath();ctx.arc(lx(sp.x),ly(sp.y),ls(0.003)*sp.size*sp.life,0,Math.PI*2);ctx.fill();
+  }
+
+  // 脉冲环
+  for(let i=pulseRings.length-1;i>=0;i--){
+    const pr=pulseRings[i];pr.r+=0.04;pr.alpha-=0.035;
+    if(pr.alpha<=0){pulseRings.splice(i,1);continue;}
+    ctx.strokeStyle=hexRgba(pr.color,pr.alpha*0.45);
+    ctx.lineWidth=ls(0.014);
+    ctx.beginPath();ctx.arc(lx(pr.x),ly(pr.y),ls(pr.r),0,Math.PI*2);ctx.stroke();
+  }
+
+  // 粒子
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.vy-=0.0006;p.life-=p.decay;
+    if(p.life<=0){particles.splice(i,1);continue;}
+    ctx.fillStyle=hexRgba(p.color,p.life);
+    ctx.beginPath();ctx.arc(lx(p.x),ly(p.y),Math.max(0.3,ls(0.005)*p.size*p.life),0,Math.PI*2);ctx.fill();
+  }
+
+  // 爱心
+  for(let i=hearts.length-1;i>=0;i--){
+    const h=hearts[i];h.y+=h.vy;h.x+=h.vx+Math.sin(h.wobble+frame*0.05)*0.01;h.life-=h.decay;
+    if(h.life<=0){hearts.splice(i,1);continue;}
+    ctx.fillStyle=`rgba(255,100,150,${h.life*0.7})`;
+    ctx.font=`${ls(h.size)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.textAlign='center';ctx.fillText('❤',lx(h.x),ly(h.y));
+  }
+
+  // 彩色纸屑
+  for(let i=confettiPieces.length-1;i>=0;i--){
+    const cf=confettiPieces[i];cf.y+=cf.vy;cf.x+=cf.vx;cf.vy+=0.0003;cf.life-=cf.decay;cf.rotation+=cf.rotSpeed;
+    if(cf.life<=0||cf.y<-2.2){confettiPieces.splice(i,1);continue;}
+    ctx.save();ctx.translate(lx(cf.x),ly(cf.y));ctx.rotate(cf.rotation);
+    ctx.fillStyle=hexRgba(cf.color,cf.life);
+    ctx.fillRect(-ls(0.005)*cf.size,-ls(0.003)*cf.size,ls(0.01)*cf.size,ls(0.006)*cf.size);
+    ctx.restore();
+  }
+
+  const age=frame-sceneStartFrame;
+
+  // ==================== 场景 0: 校门 ====================
+  if(scene===0){
+    drawSceneTitle('🏫 实验高中 · 招生启动！','全市排名第一 · 英才辈出');
+
+    // 校门建筑
+    const gx=W/2,gy=ly(0.2),gw=ls(1.5),gh=ls(1.0);
+    ctx.fillStyle='rgba(15,25,50,0.85)';
+    ctx.fillRect(gx-gw/2,gy-gh/2,gw,gh);
+    ctx.strokeStyle=hexRgba(GOLD,0.55);ctx.lineWidth=ls(0.02);
+    ctx.strokeRect(gx-gw/2,gy-gh/2,gw,gh);
+    // 牌匾
+    ctx.fillStyle='#2c1810';
+    ctx.fillRect(gx-ls(0.6),gy-gh/2-ls(0.13),ls(1.2),ls(0.13));
+    ctx.strokeStyle=hexRgba(GOLD,0.8);ctx.lineWidth=ls(0.01);
+    ctx.strokeRect(gx-ls(0.6),gy-gh/2-ls(0.13),ls(1.2),ls(0.13));
+    ctx.fillStyle=hexRgba(GOLD,0.95);
+    ctx.font=`bold ${ls(0.13)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.textAlign='center';ctx.fillText('实 验 高 中',gx,gy-gh/2-ls(0.01));
+
+    // 门柱
+    ctx.fillStyle='#3e2723';
+    ctx.fillRect(gx-ls(0.55),gy-gh/2,ls(0.1),gh);
+    ctx.fillRect(gx+ls(0.45),gy-gh/2,ls(0.1),gh);
+
+    if(age>25){
+      const ha=0.5+0.4*Math.sin(frame*0.06);
+      ctx.fillStyle=`rgba(255,255,255,${ha})`;
+      ctx.font=`${ls(0.11)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      ctx.fillText('点击进入校园 →',W/2,ly(-1.3));
+    }
+    hintEl.textContent='🏫 点击屏幕进入实验高中';
+    if(frame%60===0)spawnConfetti(10);
+  }
+
+  // ==================== 场景 1: 食堂 ====================
+  else if(scene===1){
+    drawSceneTitle('🍜 实验高中 · 皇家食堂','米其林五星大厨掌勺 · 每天不重样');
+    // 食堂卡片
+    ctx.fillStyle='rgba(20,30,50,0.8)';ctx.strokeStyle=hexRgba(GOLD,0.3);ctx.lineWidth=ls(0.01);
+    ctx.beginPath();roundRect(lx(-0.85),ly(0.2),ls(1.7),ls(0.9),ls(0.04));ctx.fill();ctx.stroke();
+    const foods=['🍜 红烧牛肉面','🍕 现烤披萨','🍣 三文鱼刺身','🍰 提拉米苏','🍗 秘制炸鸡','🧋 珍珠奶茶'];
+    ctx.textAlign='left';
+    for(let i=0;i<foods.length;i++){
+      const la=Math.min(1,(age-15-i*8)/20);
+      if(la>0){
+        ctx.fillStyle=`rgba(255,255,255,${la*0.8})`;
+        ctx.font=`${ls(0.1)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+        ctx.fillText(foods[i],lx(-0.65),ly(0.38)+i*ls(0.11));
+      }
+    }
+    ctx.textAlign='center';
+    _drawButtons('来食堂干饭！🍜');
+    hintEl.textContent='🍜 第1关：食堂诱惑';
+  }
+
+  // ==================== 场景 2: 图书馆 ====================
+  else if(scene===2){
+    drawSceneTitle('📚 实验高中 · 星空图书馆','24小时开放 · 藏书百万 · 还有懒人沙发');
+    ctx.fillStyle='rgba(20,30,50,0.8)';ctx.strokeStyle=hexRgba(PURPLE,0.35);ctx.lineWidth=ls(0.01);
+    ctx.beginPath();roundRect(lx(-0.85),ly(0.15),ls(1.7),ls(0.75),ls(0.04));ctx.fill();ctx.stroke();
+    const books=['📖 《三年高考五年模拟》(限量签名版)','📖 《如何三天成为学霸》','📖 《睡觉也能考第一》','📖 《实验高中学霸秘籍》'];
+    ctx.textAlign='left';
+    for(let i=0;i<books.length;i++){
+      const la=Math.min(1,(age-15-i*8)/20);
+      if(la>0){
+        ctx.fillStyle=`rgba(255,255,255,${la*0.8})`;
+        ctx.font=`${ls(0.1)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+        ctx.fillText(books[i],lx(-0.65),ly(0.32)+i*ls(0.13));
+      }
+    }
+    ctx.textAlign='center';
+    _drawButtons('来图书馆卷！📚');
+    hintEl.textContent='📚 第2关：图书馆诱惑';
+  }
+
+  // ==================== 场景 3: 操场 ====================
+  else if(scene===3){
+    drawSceneTitle('⚽ 实验高中 · 奥林匹克运动场','标准跑道 · 恒温泳池 · 室内篮球馆');
+    ctx.fillStyle='rgba(20,30,50,0.8)';ctx.strokeStyle=hexRgba(CYAN,0.35);ctx.lineWidth=ls(0.01);
+    ctx.beginPath();roundRect(lx(-0.85),ly(0.1),ls(1.7),ls(0.8),ls(0.04));ctx.fill();ctx.stroke();
+    ctx.fillStyle='rgba(0,200,100,0.2)';
+    ctx.fillRect(lx(-0.75),ly(0.3),ls(1.5),ls(0.45));
+    const sports=['🏀 室内篮球馆 ×2','⚽ 标准足球场','🏊 恒温游泳池','🏓 乒乓球联赛','🎾 网球场'];
+    ctx.textAlign='left';
+    for(let i=0;i<sports.length;i++){
+      const la=Math.min(1,(age-15-i*8)/20);
+      if(la>0){
+        ctx.fillStyle=`rgba(255,255,255,${la*0.8})`;
+        ctx.font=`${ls(0.1)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+        ctx.fillText(sports[i],lx(-0.55),ly(0.45)+i*ls(0.12));
+      }
+    }
+    ctx.textAlign='center';
+    _drawButtons('来操场打球！⚽');
+    hintEl.textContent='⚽ 第3关：运动诱惑';
+  }
+
+  // ==================== 场景 4: 陈姝洁出场 ====================
+  else if(scene===4){
+    drawSceneTitle('💖 重点来了！！！','实验高中校花 · 陈姝洁');
+
+    drawChenShujie(0,0.25,0.6,age%120<60?'smile':'wink');
+
+    // 名字标签
+    const tagAlpha=0.7+0.3*Math.sin(frame*0.05);
+    ctx.fillStyle=`rgba(255,107,157,${tagAlpha})`;
+    ctx.font=`bold ${ls(0.16)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.textAlign='center';
+    ctx.fillText('陈 姝 洁 ✨',lx(0),ly(-0.15));
+
+    ctx.fillStyle='rgba(255,255,255,0.7)';
+    ctx.font=`${ls(0.1)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('实验高中学生会主席 · 学霸 · 校花',W/2,ly(-0.35));
+
+    // 对话气泡
+    const bubY=ly(0.6),bubW=ls(1.2),bubH=ls(0.25);
+    ctx.fillStyle='rgba(255,255,255,0.92)';ctx.strokeStyle=hexRgba(PINK,0.4);ctx.lineWidth=ls(0.01);
+    ctx.beginPath();roundRect(W/2-bubW/2,bubY-bubH/2,bubW,bubH,ls(0.04));ctx.fill();ctx.stroke();
+    // 气泡尖角
+    ctx.fillStyle='rgba(255,255,255,0.92)';
+    ctx.beginPath();ctx.moveTo(W/2-ls(0.1),bubY+bubH/2);ctx.lineTo(W/2,bubY+bubH/2+ls(0.12));ctx.lineTo(W/2+ls(0.1),bubY+bubH/2);ctx.fill();
+
+    ctx.fillStyle='#333';
+    ctx.font=`${ls(0.11)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('"来实验高中吧，我在学生会等你哦~ 💕"',W/2,bubY+ls(0.04));
+
+    if(frame%40===0)spawnHeart(0,0.1);
+    _drawButtons('我来找陈姝洁！💖');
+    hintEl.textContent='💖 陈姝洁在实验高中等你！';
+  }
+
+  // ==================== 场景 5: 终极抉择 ====================
+  else if(scene===5){
+    drawSceneTitle('⚡ 最后的机会 ⚡','陈姝洁亲自给你发了邀请函！',PINK);
+
+    drawChenShujie(0,0.3,0.5,'smile');
+
+    // 邀请函
+    const invY=ly(-0.25),invW=ls(1.3),invH=ls(0.35);
+    ctx.fillStyle='rgba(255,240,245,0.92)';ctx.strokeStyle=hexRgba(PINK,0.6);ctx.lineWidth=ls(0.015);
+    ctx.beginPath();roundRect(W/2-invW/2,invY-invH/2,invW,invH,ls(0.035));ctx.fill();ctx.stroke();
+    ctx.fillStyle='#c2185b';
+    ctx.font=`bold ${ls(0.13)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.textAlign='center';
+    ctx.fillText('💌 陈姝洁的入学邀请函',W/2,invY-ls(0.02));
+    ctx.fillStyle='#555';
+    ctx.font=`${ls(0.09)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('"来实验高中，我们一起上学吧！"',W/2,invY+ls(0.1));
+
+    ctx.fillStyle='rgba(255,255,255,0.8)';
+    ctx.font=`${ls(0.1)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText(`已心动 ${totalAgrees} 次 | 最后一次机会！`,W/2,ly(-1.4));
+
+    _drawButtons('我愿意！！！💖');
+    hintEl.textContent='💖 终极抉择！陈姝洁在等你！';
+  }
+
+  // ==================== 场景 6: 庆祝 ====================
+  else if(scene===6){
+    const celebPulse=0.6+0.4*Math.sin(frame*0.04);
+    for(let i=0;i<16;i++){
+      const angle=(i/16)*Math.PI*2+frame*0.01;
+      ctx.strokeStyle=`rgba(255,215,0,${0.07*celebPulse})`;
+      ctx.lineWidth=ls(0.012);
+      ctx.beginPath();
+      ctx.moveTo(W/2+Math.cos(angle)*ls(0.22),H/2-ls(0.05)+Math.sin(angle)*ls(0.22));
+      ctx.lineTo(W/2+Math.cos(angle)*ls(1.3),H/2-ls(0.05)+Math.sin(angle)*ls(1.3));
+      ctx.stroke();
+    }
+
+    drawChenShujie(0,0.15,0.45,'smile');
+
+    const titles=['🎉 恭喜入学实验高中！🎉','陈姝洁：欢迎新同学！💖','🏆 实验高中 + 陈姝洁 = 完美！','🎓 三年后清北见！'];
+    const ti=Math.min(titles.length-1,Math.floor(age/80));
+    ctx.textAlign='center';
+    for(let i=3;i>=0;i--){
+      const off=i===0?0:(i%2===0?1:-1)*ls(0.005)*(i+1);
+      ctx.fillStyle=i===0?'rgba(255,215,0,0.95)':'rgba(255,150,200,0.3)';
+      ctx.font=`bold ${ls(0.24)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      if(i===0){ctx.shadowColor='rgba(255,215,0,0.6)';ctx.shadowBlur=ls(0.1);}
+      else ctx.shadowBlur=0;
+      ctx.fillText(titles[ti],W/2+off,ly(1.2)+off);
+    }
+    ctx.shadowBlur=0;
+
+    ctx.fillStyle='rgba(255,255,255,0.75)';
+    ctx.font=`${ls(0.12)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('🏫 实验高中 · 有陈姝洁的高中生活 · 完美！',W/2,ly(0.85));
+
+    if(frame%8===0){spawnConfetti(15);spawnHeart((Math.random()-0.5)*1.2,Math.random()*0.4+0.1);}
+    if(frame%15===0)spawnParticles((Math.random()-0.5)*1.2,(Math.random()-0.5)*0.8,Math.random()<0.5?GOLD:PINK,10);
+
+    const ha=0.5+0.3*Math.sin(frame*0.04);
+    ctx.fillStyle=`rgba(255,255,255,${ha})`;ctx.font=`${ls(0.1)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('点击继续庆祝！🎉',W/2,ly(-1.4));
+    hintEl.textContent=`💖 陈姝洁 + 实验高中 = 完美组合！已心动${totalAgrees}次`;
+  }
+
+  function _drawButtons(yesText){
+    const glowVal=0.5+0.4*Math.abs(Math.sin(frame*0.05));
+    drawFancyButton(btnYesX,btnYesY,0.55,0.17,yesText,PINK,0.55+glowVal*0.25,glowVal);
+    drawFancyButton(btnNoX,btnNoY,0.5,0.15,'再想想...','#555555',0.4,0);
+  }
+
+  requestAnimationFrame(render);
+}
+
+spawnParticles(0,0.2,GOLD,20);spawnConfetti(15);
+hintEl.textContent='🏫 点击屏幕开始 →';
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
