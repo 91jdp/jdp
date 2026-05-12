@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>爱心表白</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #050508;
+  display: flex; justify-content: center; align-items: center;
+  height: 100vh; overflow: hidden;
+  font-family: 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', sans-serif;
+  user-select: none; -webkit-user-select: none;
+}
+canvas { display: block; cursor: pointer; }
+#hint {
+  position: fixed; bottom: 20px; color: #9e9e9e; font-size: 14px;
+  pointer-events: none; opacity: 0.6; text-align: center; width: 100%;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint"></div>
+<script>
+// ==================== 主程序 ====================
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 800, H = 800;
+canvas.width = W; canvas.height = H;
+
+// 响应式缩放
+function resize() {
+  const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+  canvas.style.width = W * scale + 'px';
+  canvas.style.height = H * scale + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ==================== 全局状态 ====================
+let phase = 'intro'; // intro → confess → interact → celebrate
+let frame = 0;
+const confessText = '陈姝洁，我喜欢你！';
+let revealChars = 0;
+let btnNoX = 0.35, btnNoY = -0.55;
+const btnYesX = -0.35, btnYesY = -0.55;
+let particles = [];
+let orbitParticles = [];
+let pulseRings = [];
+let shootingStars = [];
+let phaseTransition = 0;
+
+// 坐标系转换: 逻辑坐标 → 画布像素
+function lx(x) { return (x + 1.8) / 3.6 * W; }
+function ly(y) { return (1.8 - y) / 3.6 * H; }
+function ls(s) { return s / 3.6 * W; }
+
+// ==================== 预计算爱心路径 ====================
+const heartPath = [];
+const nPts = 800;
+for (let i = 0; i < nPts; i++) {
+  const t = (i / nPts) * Math.PI * 2;
+  const hx = 16 * Math.pow(Math.sin(t), 3) / 16;
+  const hy = (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)) / 16;
+  heartPath.push({x: hx, y: hy});
+}
+
+function drawHeartPath(cx, cy, scale, ox, oy) {
+  ctx.beginPath();
+  for (let i = 0; i < heartPath.length; i++) {
+    const px = lx(cx + heartPath[i].x * scale + ox);
+    const py = ly(cy + heartPath[i].y * scale + oy);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+// ==================== 预生成星星 ====================
+const stars = [];
+const rng = mulberry32(42);
+function mulberry32(a) { return function() { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rand = mulberry32(42);
+for (let i = 0; i < 150; i++) {
+  stars.push({
+    x: (rand() - 0.5) * 3.6, y: (rand() - 0.5) * 3.6,
+    size: rand() * 3 + 0.5,
+    phase: rand() * Math.PI * 2,
+    speed: rand() * 0.05 + 0.015
+  });
+}
+
+// ==================== 3D 爱心绘制 ====================
+function draw3DHeart(scale, f) {
+  const sx = 0, sy = 0.1;
+
+  // 1. 阴影
+  ctx.fillStyle = 'rgba(20,0,0,0.4)';
+  drawHeartPath(0, 0.095, scale, 0.04, -0.06);
+  ctx.fill();
+
+  // 2. 暗红底层
+  ctx.fillStyle = '#600000';
+  drawHeartPath(0, 0, scale, sx, sy);
+  ctx.fill();
+
+  // 3. 主体层1
+  ctx.fillStyle = '#b71c1c';
+  drawHeartPath(0, 0, scale * 0.96, sx, sy + 0.015);
+  ctx.fill();
+
+  // 4. 主体层2
+  ctx.fillStyle = '#e53935';
+  drawHeartPath(0, 0, scale * 0.90, sx, sy + 0.025);
+  ctx.fill();
+
+  // 5. 表面层
+  ctx.fillStyle = '#ff1744';
+  drawHeartPath(0, 0, scale * 0.82, sx, sy + 0.03);
+  ctx.fill();
+
+  // 6. 高光层
+  ctx.fillStyle = 'rgba(255,82,82,0.5)';
+  drawHeartPath(0, 0, scale * 0.65, sx - 0.06, sy + 0.10);
+  ctx.fill();
+
+  // 7. 内核高光
+  ctx.fillStyle = 'rgba(255,138,128,0.35)';
+  drawHeartPath(0, 0, scale * 0.40, sx - 0.08, sy + 0.13);
+  ctx.fill();
+
+  // 8. 镜面高光点
+  const specX = lx(sx - 0.08), specY = ly(sy + 0.22);
+  const glowR = ls(0.04 + 0.01 * Math.sin(f * 0.25));
+  const grd = ctx.createRadialGradient(specX, specY, 0, specX, specY, glowR * 3);
+  grd.addColorStop(0, 'rgba(255,255,255,0.7)');
+  grd.addColorStop(0.3, 'rgba(255,205,210,0.3)');
+  grd.addColorStop(1, 'rgba(255,205,210,0)');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(specX, specY, glowR * 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 9. 边缘高光线
+  ctx.strokeStyle = 'rgba(255,110,110,0.2)';
+  ctx.lineWidth = ls(0.01);
+  drawHeartPath(0, 0, scale * 1.005, sx, sy);
+  ctx.stroke();
+}
+
+// ==================== 毛玻璃按钮 ====================
+function drawGlassBtn(x, y, w, h, color, alpha, glow, glowIntensity) {
+  const bx = lx(x), by = ly(y), bw = ls(w), bh = ls(h), br = ls(0.04);
+
+  // 外发光
+  if (glow) {
+    const ga = 0.15 + glowIntensity * 0.3;
+    ctx.strokeStyle = color.replace(')', `, ${ga})`).replace('rgb', 'rgba');
+    if (color.startsWith('#')) {
+      const r = parseInt(color.slice(1,3), 16), g = parseInt(color.slice(3,5), 16), b = parseInt(color.slice(5,7), 16);
+      ctx.strokeStyle = `rgba(${r},${g},${b},${ga})`;
+    }
+    ctx.lineWidth = ls(0.06);
+    roundRect(bx - bw/2 - ls(0.02), by - bh/2 - ls(0.02), bw + ls(0.04), bh + ls(0.04), br + 2);
+    ctx.stroke();
+  }
+
+  // 主体
+  ctx.fillStyle = color.startsWith('#')
+    ? hexToRgba(color, alpha)
+    : color;
+  roundRect(bx - bw/2, by - bh/2, bw, bh, br);
+  ctx.fill();
+
+  // 边框
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 1.2;
+  roundRect(bx - bw/2, by - bh/2, bw, bh, br);
+  ctx.stroke();
+
+  // 顶部高光
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  roundRect(bx - bw/2 + ls(0.03), by + bh/2 - ls(0.04), bw - ls(0.06), bh * 0.35, ls(0.02));
+  ctx.fill();
+
+  return {x: bx, y: by, w: bw, h: bh};
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+function hexToRgba(hex, a) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// ==================== 特效函数 ====================
+function spawnParticles() {
+  particles = [];
+  for (let i = 0; i < 200; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 0.1 + 0.015;
+    particles.push({
+      x: 0, y: 0.15,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: Math.random() * 0.02 + 0.004,
+      color: ['#ff1744','#ff6e6e','#ff8a80','#ff4081','#ffffff','#ff80ab','#f48fb1'][Math.floor(Math.random()*7)],
+      size: Math.random() * 12 + 2
+    });
+  }
+}
+
+function spawnShootingStar() {
+  return {
+    x: Math.random() * -0.8 - 0.4,
+    y: Math.random() * 0.8 + 0.5,
+    vx: Math.cos(-0.4) * (Math.random() * 0.05 + 0.03),
+    vy: Math.sin(-0.4) * (Math.random() * 0.05 + 0.03),
+    life: 1,
+    decay: Math.random() * 0.025 + 0.015,
+    length: Math.random() * 0.3 + 0.15
+  };
+}
+
+// ==================== 鼠标交互 ====================
+let mouseX = -999, mouseY = -999;
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width, scaleY = H / rect.height;
+  const px = (e.clientX - rect.left) * scaleX;
+  const py = (e.clientY - rect.top) * scaleY;
+  mouseX = (px / W) * 3.6 - 1.8;
+  mouseY = 1.8 - (py / H) * 3.6;
+
+  // 按钮逃跑逻辑
+  if (phase === 'interact') {
+    if (Math.abs(mouseX - btnNoX) < 0.3 && Math.abs(mouseY - btnNoY) < 0.15) {
+      for (let i = 0; i < 50; i++) {
+        const nx = Math.random() * 2 - 1;
+        const ny = Math.random() * 0.95 - 1.2;
+        if (Math.abs(nx - btnYesX) > 0.4 || Math.abs(ny - btnYesY) > 0.3) {
+          btnNoX = nx; btnNoY = ny; break;
+        }
+      }
+    }
+  }
+});
+
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width, scaleY = H / rect.height;
+  const px = (e.clientX - rect.left) * scaleX;
+  const py = (e.clientY - rect.top) * scaleY;
+  const cx = (px / W) * 3.6 - 1.8;
+  const cy = 1.8 - (py / H) * 3.6;
+
+  if (phase === 'intro') {
+    phase = 'confess'; frame = 0; phaseTransition = 0;
+  } else if (phase === 'confess') {
+    phase = 'interact'; frame = 0; phaseTransition = 0;
+  } else if (phase === 'interact') {
+    // 检测 "我愿意"
+    if (Math.abs(cx - btnYesX) < 0.25 && Math.abs(cy - btnYesY) < 0.12) {
+      phase = 'celebrate'; frame = 0; phaseTransition = 0; spawnParticles();
+    }
+    // 检测 "再想想"
+    if (Math.abs(cx - btnNoX) < 0.25 && Math.abs(cy - btnNoY) < 0.12) {
+      btnNoX = Math.random() * 2 - 1;
+      btnNoY = Math.random() * 0.95 - 1.2;
+    }
+  }
+});
+
+// ==================== 触摸支持 ====================
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width, scaleY = H / rect.height;
+  const px = (e.touches[0].clientX - rect.left) * scaleX;
+  const py = (e.touches[0].clientY - rect.top) * scaleY;
+  mouseX = (px / W) * 3.6 - 1.8;
+  mouseY = 1.8 - (py / H) * 3.6;
+  if (phase === 'interact') {
+    if (Math.abs(mouseX - btnNoX) < 0.32 && Math.abs(mouseY - btnNoY) < 0.17) {
+      for (let i = 0; i < 50; i++) {
+        const nx = Math.random() * 2 - 1;
+        const ny = Math.random() * 0.95 - 1.2;
+        if (Math.abs(nx - btnYesX) > 0.4 || Math.abs(ny - btnYesY) > 0.3) {
+          btnNoX = nx; btnNoY = ny; break;
+        }
+      }
+    }
+  }
+}, {passive: false});
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width, scaleY = H / rect.height;
+  const px = (e.changedTouches[0].clientX - rect.left) * scaleX;
+  const py = (e.changedTouches[0].clientY - rect.top) * scaleY;
+  const cx = (px / W) * 3.6 - 1.8;
+  const cy = 1.8 - (py / H) * 3.6;
+
+  if (phase === 'intro') { phase = 'confess'; frame = 0; phaseTransition = 0; }
+  else if (phase === 'confess') { phase = 'interact'; frame = 0; phaseTransition = 0; }
+  else if (phase === 'interact') {
+    if (Math.abs(cx - btnYesX) < 0.28 && Math.abs(cy - btnYesY) < 0.14) {
+      phase = 'celebrate'; frame = 0; phaseTransition = 0; spawnParticles();
+    }
+    if (Math.abs(cx - btnNoX) < 0.28 && Math.abs(cy - btnNoY) < 0.14) {
+      btnNoX = Math.random() * 2 - 1;
+      btnNoY = Math.random() * 0.95 - 1.2;
+    }
+  }
+});
+
+// ==================== 主渲染循环 ====================
+function render() {
+  frame++;
+
+  if (phaseTransition < 1) phaseTransition = Math.min(1, phaseTransition + 0.04);
+
+  ctx.clearRect(0, 0, W, H);
+
+  // ---- 背景 ----
+  const bgGrd = ctx.createRadialGradient(W/2, H/2, ls(0.2), W/2, H/2, ls(2.2));
+  bgGrd.addColorStop(0, '#0f0808');
+  bgGrd.addColorStop(0.45, '#0a0608');
+  bgGrd.addColorStop(0.8, '#050508');
+  bgGrd.addColorStop(1, '#020204');
+  ctx.fillStyle = bgGrd;
+  ctx.fillRect(0, 0, W, H);
+
+  // ---- 星星 ----
+  for (const s of stars) {
+    const twinkle = 0.2 + 0.8 * Math.abs(Math.sin(frame * s.speed + s.phase));
+    const sx = lx(s.x), sy = ly(s.y);
+    ctx.fillStyle = `rgba(255,255,255,${0.5 * twinkle})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, Math.max(0.3, ls(0.004 * s.size * twinkle)), 0, Math.PI*2);
+    ctx.fill();
+    // 大亮星加辉光
+    if (s.size > 2.5) {
+      const glowGrd = ctx.createRadialGradient(sx, sy, 0, sx, sy, ls(0.02));
+      glowGrd.addColorStop(0, `rgba(255,224,224,${0.5*twinkle})`);
+      glowGrd.addColorStop(1, 'rgba(255,224,224,0)');
+      ctx.fillStyle = glowGrd;
+      ctx.beginPath(); ctx.arc(sx, sy, ls(0.02), 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  // ---- 流星 ----
+  if (Math.random() < 0.012 && shootingStars.length < 3) shootingStars.push(spawnShootingStar());
+  for (let i = shootingStars.length - 1; i >= 0; i--) {
+    const ss = shootingStars[i];
+    ss.x += ss.vx; ss.y += ss.vy; ss.life -= ss.decay;
+    if (ss.life <= 0 || Math.abs(ss.x) > 2 || Math.abs(ss.y) > 2) { shootingStars.splice(i,1); continue; }
+    const ex = lx(ss.x), ey = ly(ss.y);
+    const tx = lx(ss.x - ss.vx * ss.length * 10);
+    const ty = ly(ss.y - ss.vy * ss.length * 10);
+    const lineGrd = ctx.createLinearGradient(ex, ey, tx, ty);
+    lineGrd.addColorStop(0, `rgba(255,255,255,${ss.life*0.8})`);
+    lineGrd.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.strokeStyle = lineGrd;
+    ctx.lineWidth = ls(0.015);
+    ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(tx, ty); ctx.stroke();
+  }
+
+  // ---- 爱心 ----
+  const heartScale = phase === 'celebrate'
+    ? 1 + 0.07 * Math.sin(frame * 0.35)
+    : 1 + 0.04 * Math.sin(frame * 0.22);
+  draw3DHeart(heartScale, frame);
+
+  // ---- 脉冲环 ----
+  if (frame % 12 === 0) pulseRings.push({r: heartScale * 0.45, alpha: 1});
+  for (let i = pulseRings.length - 1; i >= 0; i--) {
+    pulseRings[i].r += 0.025;
+    pulseRings[i].alpha -= 0.04;
+    if (pulseRings[i].alpha <= 0) { pulseRings.splice(i,1); continue; }
+    const cx = lx(0), cy = ly(0.1);
+    ctx.strokeStyle = `rgba(255,64,129,${pulseRings[i].alpha * 0.4})`;
+    ctx.lineWidth = ls(0.015);
+    ctx.beginPath(); ctx.arc(cx, cy, ls(pulseRings[i].r), 0, Math.PI*2); ctx.stroke();
+  }
+
+  // ---- 环绕光点 ----
+  while (orbitParticles.length < 22) {
+    orbitParticles.push({
+      angle: Math.random() * Math.PI * 2,
+      radius: Math.random() * 0.3 + 0.45,
+      speed: Math.random() * 0.04 + 0.015,
+      size: Math.random() * 6 + 2,
+      color: ['#ff8a80','#ff80ab','#ff4081','#ffffff','#ffab91'][Math.floor(Math.random()*5)],
+      phase: Math.random() * Math.PI * 2
+    });
+  }
+  for (const op of orbitParticles) {
+    op.angle += op.speed;
+    const ox = lx(Math.cos(op.angle) * op.radius);
+    const oy = ly(Math.sin(op.angle) * op.radius * 0.75 + 0.1);
+    const b = Math.max(0.03, 0.35 + 0.45 * Math.sin(frame * 0.06 + op.phase));
+    ctx.fillStyle = op.color.startsWith('#')
+      ? hexToRgba(op.color, Math.min(1, Math.max(0.02, b * 0.7)))
+      : op.color;
+    ctx.beginPath();
+    ctx.arc(ox, oy, Math.max(0.3, ls(0.005) * op.size * b), 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // ---- 粒子系统 ----
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy -= 0.0008; p.life -= p.decay;
+    if (p.life <= 0) { particles.splice(i,1); continue; }
+    ctx.fillStyle = hexToRgba(p.color, p.life);
+    ctx.beginPath();
+    ctx.arc(lx(p.x), ly(p.y), Math.max(0.3, ls(0.006) * p.size * p.life), 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // ==================== 各阶段 UI ====================
+  const ta = phaseTransition;
+
+  if (phase === 'intro') {
+    const ha = (0.4 + 0.35 * Math.sin(frame * 0.07)) * ta;
+    ctx.fillStyle = `rgba(255,138,128,${ha * 0.3})`;
+    ctx.font = `bold ${ls(0.2)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.textAlign = 'center';
+    // 发光文字
+    const tx = lx(0), ty = ly(-1.35);
+    ctx.shadowColor = 'rgba(255,138,128,0.6)';
+    ctx.shadowBlur = ls(0.06);
+    ctx.fillStyle = `rgba(255,255,255,${ha})`;
+    ctx.fillText('✨ 点击屏幕开始 ✨', tx, ty);
+    ctx.shadowBlur = 0;
+  }
+
+  else if (phase === 'confess') {
+    revealChars = Math.min(confessText.length, Math.floor(frame / 2));
+    const shown = confessText.slice(0, revealChars);
+    const cursor = (Math.floor(frame / 12) % 2 === 0 && revealChars < confessText.length) ? '|' : '';
+    const tx = lx(0), ty = ly(-0.95);
+
+    // 发光效果
+    ctx.textAlign = 'center';
+    for (let i = 2; i >= 0; i--) {
+      const off = (i - 1) * ls(0.008);
+      ctx.fillStyle = i < 2 ? `rgba(255,82,82,0.2)` : `rgba(255,255,255,0.9)`;
+      ctx.font = `bold ${ls(0.3)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      if (i === 2) { ctx.shadowColor = 'rgba(255,100,100,0.5)'; ctx.shadowBlur = ls(0.05); }
+      else ctx.shadowBlur = 0;
+      ctx.fillText(shown + cursor, tx + off, ty + off);
+    }
+    ctx.shadowBlur = 0;
+
+    if (revealChars >= confessText.length) {
+      const hintAlpha = 0.5 + 0.35 * Math.sin(frame * 0.05);
+      ctx.fillStyle = `rgba(255,138,128,${hintAlpha})`;
+      ctx.font = `${ls(0.15)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      ctx.fillText('（点击继续...）', tx, ly(-1.3));
+    }
+  }
+
+  else if (phase === 'interact') {
+    // 表白文字
+    const tx = lx(0), ty = ly(-0.85);
+    ctx.textAlign = 'center';
+    for (let i = 4; i >= 0; i--) {
+      const off = i === 0 ? 0 : (i % 2 === 0 ? 1 : -1) * ls(0.006) * Math.ceil(i/2);
+      ctx.fillStyle = i === 0 ? 'rgba(255,255,255,0.9)' : 'rgba(255,82,82,0.18)';
+      ctx.font = `bold ${ls(0.28)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      if (i === 0) { ctx.shadowColor = 'rgba(255,80,80,0.5)'; ctx.shadowBlur = ls(0.06); }
+      else ctx.shadowBlur = 0;
+      ctx.fillText(confessText, tx + off, ty + off);
+    }
+    ctx.shadowBlur = 0;
+
+    // 副标题
+    ctx.fillStyle = 'rgba(255,171,145,0.85)';
+    ctx.font = `${ls(0.19)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('做我女朋友好不好？', tx, ly(-1.15));
+
+    // "我愿意" 按钮 (呼吸发光)
+    const glowVal = 0.3 + 0.4 * Math.abs(Math.sin(frame * 0.06));
+    drawGlassBtn(btnYesX, btnYesY, 0.50, 0.19, '#e91e63', 0.5 + glowVal * 0.25, true, glowVal);
+    ctx.fillStyle = 'white';
+    ctx.font = `bold ${ls(0.17)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('我愿意 ❤', lx(btnYesX), ly(btnYesY) + ls(0.06));
+
+    // "再想想" 按钮
+    drawGlassBtn(btnNoX, btnNoY, 0.50, 0.19, '#444444', 0.4, false, 0);
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = `${ls(0.16)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('再想想...', lx(btnNoX), ly(btnNoY) + ls(0.055));
+
+    // 提示
+    ctx.fillStyle = 'rgba(158,158,158,0.55)';
+    ctx.font = `${ls(0.12)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('用鼠标点击你的选择吧~', tx, ly(-1.52));
+  }
+
+  else if (phase === 'celebrate') {
+    const texts = [
+      '💕 太好了！！！💕',
+      '陈姝洁 ❤️ 永远在一起',
+      '从今往后，我的代码只为你写',
+      '你是我的唯一 Exception',
+      '这辈子都不想 catch 别人了'
+    ];
+    const textIdx = Math.min(texts.length - 1, Math.floor(frame / 50));
+    const mainText = texts[textIdx];
+    const textAlpha = Math.min(1, frame / 35);
+
+    const tx = lx(0), ty = ly(-0.7);
+    ctx.textAlign = 'center';
+
+    // 发光主标题
+    for (let i = 4; i >= 0; i--) {
+      const off = i === 0 ? 0 : (i % 2 === 0 ? 1 : -1) * ls(0.006) * Math.ceil(i/2);
+      ctx.fillStyle = i === 0
+        ? `rgba(255,255,255,${textAlpha * 0.95})`
+        : `rgba(255,64,129,${textAlpha * 0.18})`;
+      ctx.font = `bold ${ls(0.26)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      if (i === 0) { ctx.shadowColor = 'rgba(255,64,129,0.6)'; ctx.shadowBlur = ls(0.08); }
+      else ctx.shadowBlur = 0;
+      ctx.fillText(mainText, tx + off, ty + off);
+    }
+    ctx.shadowBlur = 0;
+
+    if (textIdx >= 1) {
+      const subText = texts[Math.min(texts.length-1, textIdx+1)];
+      ctx.fillStyle = `rgba(255,138,128,${textAlpha*0.75})`;
+      ctx.font = `${ls(0.17)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      ctx.fillText(subText, tx, ly(-1.05));
+    }
+
+    // 旋转小爱心 (8个)
+    for (let i = 0; i < 8; i++) {
+      const angle = frame * 0.035 + i * Math.PI / 4;
+      const rx = lx(Math.cos(angle) * 0.55);
+      const ry = ly(Math.sin(angle) * 0.55 + 0.1);
+      // 拖尾
+      for (let t = 2; t >= 0; t--) {
+        const ta = angle - t * 0.08;
+        const trx = lx(Math.cos(ta) * 0.55);
+        const try_ = ly(Math.sin(ta) * 0.55 + 0.1);
+        ctx.fillStyle = `rgba(255,100,100,${0.2 - t*0.06})`;
+        ctx.font = `${ls(0.07 + t * 0.025)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+        ctx.fillText('❤', trx, try_ + ls(0.03));
+      }
+      ctx.fillStyle = 'rgba(255,80,80,0.7)';
+      ctx.font = `${ls(0.12 + 0.03*Math.sin(frame*0.08+i))}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      ctx.fillText('❤', rx, ry + ls(0.04));
+    }
+
+    // 持续粒子
+    if (frame % 2 === 0 && frame < 200) {
+      for (let i = 0; i < 4; i++) {
+        particles.push({
+          x: (Math.random()-0.5)*0.3, y: 0.1+(Math.random()-0.5)*0.4,
+          vx: Math.cos(Math.random()*Math.PI*2)*(Math.random()*0.06+0.01),
+          vy: Math.sin(Math.random()*Math.PI*2)*(Math.random()*0.06+0.01),
+          life: 1, decay: Math.random()*0.025+0.006,
+          color: ['#ff1744','#ff6e6e','#ff8a80','#ff4081','#ffffff','#ff80ab'][Math.floor(Math.random()*6)],
+          size: Math.random()*13+2
+        });
+      }
+    }
+
+    // 爆炸环
+    if (frame < 80) {
+      const ringAlpha = 1 - frame/80;
+      [1, 0.7].forEach(ratio => {
+        ctx.strokeStyle = `rgba(${ratio===1?'255,64,129':'255,255,255'},${ringAlpha*(ratio===1?0.5:0.35)})`;
+        ctx.lineWidth = ls(ratio===1?0.02:0.01);
+        ctx.beginPath();
+        ctx.arc(lx(0), ly(0.1), ls(frame*0.018*ratio), 0, Math.PI*2);
+        ctx.stroke();
+      });
+    }
+
+    if (frame > 80) {
+      ctx.fillStyle = 'rgba(158,158,158,0.45)';
+      ctx.font = `${ls(0.12)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      ctx.fillText('—— 程序员的浪漫，永不 crash ——', tx, ly(-1.52));
+    }
+  }
+
+  requestAnimationFrame(render);
+}
+
+// ==================== 启动 ====================
+document.getElementById('hint').textContent = '';
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
