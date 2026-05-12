@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>动漫人物搞怪跳舞 - 致关雅威</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a20; overflow: hidden;
+  display: flex; justify-content: center; align-items: center;
+  height: 100vh;
+  font-family: 'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif;
+  user-select: none; -webkit-user-select: none;
+}
+canvas { display: block; cursor: pointer; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 800, H = 800;
+canvas.width = W; canvas.height = H;
+
+function resize() {
+  const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+  canvas.style.width = W * scale + 'px';
+  canvas.style.height = H * scale + 'px';
+}
+resize(); window.addEventListener('resize', resize);
+
+function lx(x) { return (x + 2) / 4 * W; }
+function ly(y) { return (2 - y) / 4 * H; }
+function ls(s) { return s / 4 * W; }
+
+// ==================== 状态 ====================
+let frame = 0;
+let particles = [];
+let notes = [];
+let sparkles = [];
+let confetti = [];
+let beatIntensity = 0;
+let clickBursts = [];
+let shootingStars = [];
+
+// ==================== 星星背景 ====================
+const stars = [];
+for (let i = 0; i < 180; i++) {
+  stars.push({
+    x: Math.random() * 4 - 2, y: Math.random() * 4 - 2,
+    size: Math.random() * 2.5 + 0.3,
+    phase: Math.random() * Math.PI * 2,
+    speed: Math.random() * 0.05 + 0.01,
+    hue: [40, 180, 280, 320, 200][Math.floor(Math.random() * 5)]
+  });
+}
+
+// ==================== 地板 ====================
+function drawStage() {
+  // 舞台
+  const stageGrd = ctx.createLinearGradient(0, ly(0.2), 0, ly(-1.5));
+  stageGrd.addColorStop(0, '#1a1040');
+  stageGrd.addColorStop(0.7, '#0d0a25');
+  stageGrd.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = stageGrd;
+  ctx.fillRect(0, ly(0.2), W, H - ly(0.2));
+
+  // 地板线
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  for (let i = -2; i <= 2; i += 0.3) {
+    const y = ly(i * 0.4 - 0.3);
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  // 聚光灯
+  for (let i = -1; i <= 1; i += 1) {
+    const spotGrd = ctx.createRadialGradient(lx(i * 0.85), ly(0.1), 0, lx(i * 0.85), ly(0.1), ls(0.7));
+    spotGrd.addColorStop(0, `rgba(255,255,200,${0.06 + beatIntensity * 0.04})`);
+    spotGrd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = spotGrd;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+// ==================== 动漫人物绘制 ====================
+function drawChibi(cx, cy, scale, dancePhase, charIndex) {
+  const s = ls(scale);
+  const bx = lx(cx), by = ly(cy);
+
+  const bounceY = Math.abs(Math.sin(dancePhase)) * s * 0.3;
+  const tiltAngle = Math.sin(dancePhase * 1.7) * 0.15;
+  const armWave = Math.sin(dancePhase * 2.3) * s * 0.25;
+  const legKick = Math.sin(dancePhase * 1.9) * s * 0.2;
+
+  ctx.save();
+  ctx.translate(bx, by - bounceY);
+  ctx.rotate(tiltAngle * (charIndex % 2 === 0 ? 1 : -1));
+
+  const hairColors = ['#ff6b9d', '#6bb5ff', '#ff8a65', '#a78bfa'];
+  const skinColor = '#ffe0c0';
+  const outfitColors = ['#ff80ab', '#64b5f6', '#ffab91', '#b39ddb'];
+
+  const hc = hairColors[charIndex % 4];
+  const oc = outfitColors[charIndex % 4];
+
+  // 身体
+  ctx.fillStyle = oc;
+  ctx.beginPath();
+  ctx.ellipse(0, s * 0.15, s * 0.35, s * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 腿
+  ctx.strokeStyle = skinColor;
+  ctx.lineWidth = s * 0.15;
+  ctx.lineCap = 'round';
+  for (let l = -1; l <= 1; l += 2) {
+    ctx.beginPath();
+    ctx.moveTo(l * s * 0.2, s * 0.55);
+    ctx.lineTo(l * s * 0.25 + legKick * l, s * 0.95);
+    ctx.stroke();
+  }
+
+  // 手臂
+  for (let a = -1; a <= 1; a += 2) {
+    ctx.beginPath();
+    ctx.moveTo(a * s * 0.35, s * -0.05);
+    ctx.lineTo(a * s * 0.55 + armWave * a, s * 0.3 + armWave * 0.5);
+    ctx.stroke();
+  }
+
+  // 头
+  ctx.fillStyle = skinColor;
+  ctx.beginPath();
+  ctx.arc(0, s * -0.35, s * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 头发
+  ctx.fillStyle = hc;
+  ctx.beginPath();
+  ctx.arc(0, s * -0.42, s * 0.43, Math.PI, Math.PI * 2);
+  ctx.fill();
+  // 刘海
+  ctx.beginPath();
+  ctx.ellipse(0, s * -0.28, s * 0.42, s * 0.18, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // 侧发
+  for (let sd = -1; sd <= 1; sd += 2) {
+    ctx.beginPath();
+    ctx.ellipse(sd * s * 0.35, s * -0.35, s * 0.12, s * 0.25, sd * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 蝴蝶结/发饰
+  ctx.fillStyle = '#ff4081';
+  for (let b = -1; b <= 1; b += 2) {
+    ctx.beginPath();
+    ctx.arc(b * s * 0.28, s * -0.73, s * 0.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(0, s * -0.7, s * 0.06, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 眼睛
+  for (let e = -1; e <= 1; e += 2) {
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(e * s * 0.13, s * -0.4, s * 0.11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.arc(e * s * 0.13, s * -0.39, s * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+    // 高光
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(e * s * 0.115, s * -0.42, s * 0.025, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 嘴巴 (随节奏变大)
+  const mouthScale = 1 + beatIntensity * 0.8;
+  ctx.fillStyle = '#ff6b6b';
+  ctx.beginPath();
+  ctx.arc(0, s * -0.25, s * 0.06 * mouthScale, 0, Math.PI);
+  ctx.fill();
+
+  // 腮红
+  for (let bl = -1; bl <= 1; bl += 2) {
+    ctx.fillStyle = 'rgba(255,150,150,0.25)';
+    ctx.beginPath();
+    ctx.arc(bl * s * 0.22, s * -0.28, s * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// ==================== 音符 ====================
+const noteShapes = ['♪', '♫', '♬', '♩', '🎵', '🎶', '💫', '⭐'];
+
+function spawnNote(x, y) {
+  return {
+    x, y,
+    vy: Math.random() * 0.03 + 0.015,
+    vx: (Math.random() - 0.5) * 0.015,
+    life: 1,
+    decay: Math.random() * 0.012 + 0.006,
+    text: noteShapes[Math.floor(Math.random() * noteShapes.length)],
+    size: Math.random() * 0.16 + 0.08
+  };
+}
+
+// ==================== 鼠标交互 ====================
+let mouseX = -999, mouseY = -999;
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const sX = W / rect.width, sY = H / rect.height;
+  mouseX = ((e.clientX - rect.left) * sX) / W * 4 - 2;
+  mouseY = 2 - ((e.clientY - rect.top) * sY) / H * 4;
+  if (Math.random() < 0.25) {
+    sparkles.push({
+      x: mouseX + (Math.random()-0.5)*0.3,
+      y: mouseY + (Math.random()-0.5)*0.3,
+      life: 1, decay: Math.random()*0.03+0.015,
+      size: Math.random()*4+1
+    });
+  }
+});
+
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const sX = W / rect.width, sY = H / rect.height;
+  const cx = ((e.clientX - rect.left) * sX) / W * 4 - 2;
+  const cy = 2 - ((e.clientY - rect.top) * sY) / H * 4;
+
+  beatIntensity = Math.min(1, beatIntensity + 0.35);
+  clickBursts.push({ x: cx, y: cy, life: 1, decay: 0.04 });
+
+  // 爆发音符
+  for (let i = 0; i < 12; i++) {
+    notes.push({
+      x: cx, y: cy,
+      vy: Math.random() * 0.06 + 0.02,
+      vx: (Math.random() - 0.5) * 0.05,
+      life: 1, decay: Math.random() * 0.015 + 0.007,
+      text: noteShapes[Math.floor(Math.random() * noteShapes.length)],
+      size: Math.random() * 0.22 + 0.1
+    });
+  }
+  // 彩色纸屑
+  for (let i = 0; i < 25; i++) {
+    confetti.push({
+      x: cx, y: cy,
+      vx: (Math.random() - 0.5) * 0.09,
+      vy: Math.random() * 0.08 + 0.02,
+      life: 1, decay: Math.random() * 0.018 + 0.005,
+      color: ['#ff80ab','#64b5f6','#ffd54f','#b39ddb','#81c784','#ff8a65','#fff176'][Math.floor(Math.random()*7)],
+      size: Math.random() * 8 + 3,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.2
+    });
+  }
+});
+
+// 触摸
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const sX = W / rect.width, sY = H / rect.height;
+  mouseX = ((e.touches[0].clientX - rect.left) * sX) / W * 4 - 2;
+  mouseY = 2 - ((e.touches[0].clientY - rect.top) * sY) / H * 4;
+  if (Math.random() < 0.3) {
+    sparkles.push({
+      x: mouseX + (Math.random()-0.5)*0.3,
+      y: mouseY + (Math.random()-0.5)*0.3,
+      life: 1, decay: Math.random()*0.03+0.015,
+      size: Math.random()*4+1
+    });
+  }
+}, {passive: false});
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const sX = W / rect.width, sY = H / rect.height;
+  const cx = ((e.changedTouches[0].clientX - rect.left) * sX) / W * 4 - 2;
+  const cy = 2 - ((e.changedTouches[0].clientY - rect.top) * sY) / H * 4;
+  beatIntensity = Math.min(1, beatIntensity + 0.35);
+  clickBursts.push({ x: cx, y: cy, life: 1, decay: 0.04 });
+  for (let i = 0; i < 12; i++) {
+    notes.push({
+      x: cx, y: cy,
+      vy: Math.random() * 0.06 + 0.02,
+      vx: (Math.random() - 0.5) * 0.05,
+      life: 1, decay: Math.random() * 0.015 + 0.007,
+      text: noteShapes[Math.floor(Math.random() * noteShapes.length)],
+      size: Math.random() * 0.22 + 0.1
+    });
+  }
+  for (let i = 0; i < 25; i++) {
+    confetti.push({
+      x: cx, y: cy,
+      vx: (Math.random() - 0.5) * 0.09,
+      vy: Math.random() * 0.08 + 0.02,
+      life: 1, decay: Math.random() * 0.018 + 0.005,
+      color: ['#ff80ab','#64b5f6','#ffd54f','#b39ddb','#81c784','#ff8a65','#fff176'][Math.floor(Math.random()*7)],
+      size: Math.random() * 8 + 3,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.2
+    });
+  }
+});
+
+// ==================== 流星 ====================
+function spawnStar() {
+  return {
+    x: Math.random() * 1.5 - 0.5, y: Math.random() * 1 + 0.8,
+    vx: Math.cos(-0.3)*(Math.random()*0.06+0.03),
+    vy: Math.sin(-0.3)*(Math.random()*0.06+0.03),
+    life: 1, decay: Math.random()*0.025+0.01,
+    length: Math.random()*0.3+0.18
+  };
+}
+
+// ==================== 主循环 ====================
+function render() {
+  frame++;
+  beatIntensity = Math.max(0, beatIntensity - 0.008);
+
+  // 背景
+  const bgGrd = ctx.createRadialGradient(W/2, H/2, ls(0.1), W/2, H/2, ls(2.5));
+  bgGrd.addColorStop(0, '#1a1040');
+  bgGrd.addColorStop(0.5, '#0f0a28');
+  bgGrd.addColorStop(1, '#060610');
+  ctx.fillStyle = bgGrd;
+  ctx.fillRect(0, 0, W, H);
+
+  // 迪斯科光球效果
+  if (beatIntensity > 0.2) {
+    const discoAlpha = beatIntensity * 0.08;
+    const discoHue = (frame * 3) % 360;
+    const discoGrd = ctx.createRadialGradient(W/2, H*0.3, 0, W/2, H*0.3, ls(2));
+    discoGrd.addColorStop(0, `hsla(${discoHue}, 80%, 60%, ${discoAlpha})`);
+    discoGrd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = discoGrd;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // 星星
+  for (const s of stars) {
+    const twinkle = 0.25 + 0.75 * Math.abs(Math.sin(frame * s.speed + s.phase));
+    ctx.fillStyle = `hsla(${s.hue}, 80%, 75%, ${0.55*twinkle})`;
+    ctx.beginPath();
+    ctx.arc(lx(s.x), ly(s.y), Math.max(0.3, ls(0.003)*s.size*twinkle), 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // 流星
+  if (Math.random() < 0.008 && shootingStars.length < 2) shootingStars.push(spawnStar());
+  for (let i = shootingStars.length - 1; i >= 0; i--) {
+    const ss = shootingStars[i];
+    ss.x += ss.vx; ss.y += ss.vy; ss.life -= ss.decay;
+    if (ss.life <= 0) { shootingStars.splice(i,1); continue; }
+    const gx = lx(ss.x), gy = ly(ss.y);
+    const tx = lx(ss.x - ss.vx*ss.length*8), ty = ly(ss.y - ss.vy*ss.length*8);
+    const lgrd = ctx.createLinearGradient(gx, gy, tx, ty);
+    lgrd.addColorStop(0, `rgba(255,255,255,${ss.life*0.7})`);
+    lgrd.addColorStop(1, 'rgba(200,200,255,0)');
+    ctx.strokeStyle = lgrd;
+    ctx.lineWidth = ls(0.013);
+    ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(tx, ty); ctx.stroke();
+  }
+
+  // 舞台
+  drawStage();
+
+  // 三个动漫人物
+  const dancers = [
+    { cx: -0.85, cy: -0.15, sc: 0.32, phase: frame * 0.07, ci: 0 },
+    { cx: 0, cy: -0.2, sc: 0.38, phase: frame * 0.085 + 0.6, ci: 1 },
+    { cx: 0.85, cy: -0.15, sc: 0.32, phase: frame * 0.07 + 1.2, ci: 2 }
+  ];
+
+  for (const d of dancers) {
+    drawChibi(d.cx, d.cy, d.sc, d.phase, d.ci);
+  }
+
+  // 音符粒子
+  if (frame % 4 === 0) {
+    const dn = dancers[Math.floor(Math.random() * 3)];
+    notes.push(spawnNote(dn.cx, dn.cy - 0.3));
+  }
+
+  for (let i = notes.length - 1; i >= 0; i--) {
+    const n = notes[i];
+    n.y += n.vy; n.x += n.vx; n.life -= n.decay;
+    if (n.life <= 0) { notes.splice(i,1); continue; }
+    ctx.fillStyle = `rgba(255,255,255,${n.life * 0.8})`;
+    ctx.font = `${ls(n.size)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(n.text, lx(n.x), ly(n.y));
+  }
+
+  // 纸屑
+  for (let i = confetti.length - 1; i >= 0; i--) {
+    const cf = confetti[i];
+    cf.x += cf.vx; cf.y += cf.vy; cf.vy -= 0.001; cf.life -= cf.decay;
+    cf.rotation += cf.rotSpeed;
+    if (cf.life <= 0) { confetti.splice(i,1); continue; }
+    ctx.save();
+    ctx.translate(lx(cf.x), ly(cf.y));
+    ctx.rotate(cf.rotation);
+    ctx.fillStyle = cf.color.replace(')', `, ${cf.life})`).replace('#', 'rgba(');
+    ctx.fillRect(-ls(0.008)*cf.size, -ls(0.004)*cf.size, ls(0.016)*cf.size, ls(0.008)*cf.size);
+    ctx.restore();
+  }
+
+  // 点击爆发环
+  for (let i = clickBursts.length - 1; i >= 0; i--) {
+    const cb = clickBursts[i];
+    cb.life -= cb.decay;
+    if (cb.life <= 0) { clickBursts.splice(i,1); continue; }
+    const r = (1 - cb.life) * 0.5;
+    ctx.strokeStyle = `rgba(255,255,255,${cb.life * 0.5})`;
+    ctx.lineWidth = ls(0.015);
+    ctx.beginPath();
+    ctx.arc(lx(cb.x), ly(cb.y), ls(r), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // 鼠标跟随火花
+  for (let i = sparkles.length - 1; i >= 0; i--) {
+    const sp = sparkles[i];
+    sp.life -= sp.decay;
+    if (sp.life <= 0) { sparkles.splice(i,1); continue; }
+    ctx.fillStyle = `rgba(255,255,200,${sp.life*0.8})`;
+    ctx.beginPath();
+    ctx.arc(lx(sp.x), ly(sp.y), ls(0.003)*sp.size*sp.life, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // ==================== UI 文字 ====================
+  // 标题
+  const titleY = ly(1.4);
+  ctx.textAlign = 'center';
+  const wave = Math.sin(frame * 0.04) * 0.5;
+  for (let i = 3; i >= 0; i--) {
+    const off = i === 0 ? 0 : (i % 2 === 0 ? 1 : -1) * ls(0.005) * (i + 1);
+    ctx.fillStyle = i === 0
+      ? 'rgba(255,255,255,0.9)'
+      : `hsla(${280 + i * 40}, 80%, 70%, 0.25)`;
+    ctx.font = i === 0
+      ? `bold ${ls(0.24)}px "Microsoft YaHei","PingFang SC",sans-serif`
+      : `${ls(0.24)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    if (i === 0) {
+      ctx.shadowColor = 'rgba(200,150,255,0.6)';
+      ctx.shadowBlur = ls(0.07);
+    } else {
+      ctx.shadowBlur = 0;
+    }
+    ctx.fillText('🎀 动漫人物搞怪跳舞 🎀', W/2 + off, titleY + off);
+  }
+  ctx.shadowBlur = 0;
+
+  // 致关雅威
+  const toAlpha = 0.6 + 0.3 * Math.sin(frame * 0.05);
+  ctx.fillStyle = `rgba(255,200,230,${toAlpha})`;
+  ctx.font = `${ls(0.15)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+  ctx.fillText('—— 致 关雅威 ——', W/2, ly(1.1));
+
+  // 底部提示
+  const hintAlpha = 0.45 + 0.25 * Math.sin(frame * 0.035);
+  ctx.fillStyle = `rgba(200,180,220,${hintAlpha})`;
+  ctx.font = `${ls(0.11)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+  ctx.fillText('点击屏幕打节拍！越点越嗨 🎵', W/2, ly(-1.55));
+
+  requestAnimationFrame(render);
+}
+
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
