@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>火影忍者 - 召唤张子皓</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a0a; overflow: hidden;
+  display: flex; justify-content: center; align-items: center;
+  height: 100vh;
+  font-family: 'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif;
+  user-select: none; -webkit-user-select: none;
+}
+canvas { display: block; cursor: pointer; }
+#ui-hint {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  color: #ff9800; font-size: 14px; pointer-events: none; opacity: 0.7;
+  text-align: center; font-family: 'Microsoft YaHei','PingFang SC',sans-serif;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui-hint"></div>
+<script>
+// ==================== 火影忍者 · 召唤张子皓 ====================
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const hintEl = document.getElementById('ui-hint');
+const W = 800, H = 800;
+canvas.width = W; canvas.height = H;
+
+function resize() {
+  const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+  canvas.style.width = W * scale + 'px';
+  canvas.style.height = H * scale + 'px';
+}
+resize(); window.addEventListener('resize', resize);
+
+function lx(x) { return (x + 2) / 4 * W; }
+function ly(y) { return (2 - y) / 4 * H; }
+function ls(s) { return s / 4 * W; }
+
+// ==================== 全局状态 ====================
+let scene = 0; // 0=卷轴, 1=忍术修炼, 2=通灵术, 3=集结
+let frame = 0;
+let sceneTransition = 0;
+let particles = [];
+let kunais = [];
+let rasengans = [];
+let smokeParticles = [];
+let sharinganRotation = 0;
+let scrollUnfurl = 0;
+let chakraGlow = 0;
+let clickCount = 0;
+let totalClicks = 0;
+let summonProgress = 0; // 通灵术进度
+
+// ==================== 背景忍者星空 ====================
+const ninjaStars = [];
+for (let i = 0; i < 150; i++) {
+  ninjaStars.push({
+    x: Math.random() * 4 - 2, y: Math.random() * 4 - 2,
+    size: Math.random() * 2 + 0.3,
+    phase: Math.random() * Math.PI * 2,
+    speed: Math.random() * 0.04 + 0.01,
+    twinkle: Math.random() < 0.15 // 少数是手里剑形状
+  });
+}
+
+// ==================== 忍者文字/符号 ====================
+const ninjaSymbols = ['忍', '火', '影', '風', '雷', '土', '水', '円', '術', '翔'];
+
+// ==================== 绘制函数 ====================
+
+// 写轮眼
+function drawSharingan(cx, cy, size, rotation) {
+  const sx = lx(cx), sy = ly(cy), r = ls(size);
+  // 外圈
+  ctx.fillStyle = '#c62828';
+  ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI*2); ctx.fill();
+  // 内圈
+  ctx.fillStyle = '#1a0000';
+  ctx.beginPath(); ctx.arc(sx, sy, r*0.75, 0, Math.PI*2); ctx.fill();
+  // 瞳孔
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.arc(sx, sy, r*0.2, 0, Math.PI*2); ctx.fill();
+  // 勾玉 x3
+  for (let t = 0; t < 3; t++) {
+    const angle = rotation + t * Math.PI*2/3;
+    const tx = sx + Math.cos(angle) * r * 0.45;
+    const ty = sy + Math.sin(angle) * r * 0.45;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(tx, ty, r*0.14, angle - 0.4, angle + Math.PI + 0.4);
+    ctx.fill();
+    // 勾玉尾部小球
+    ctx.beginPath();
+    ctx.arc(tx + Math.cos(angle)*r*0.08, ty + Math.sin(angle)*r*0.08, r*0.09, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+// 螺旋丸
+function drawRasengan(cx, cy, r, alpha) {
+  const sx = lx(cx), sy = ly(cy), sr = ls(r);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // 核心光球
+  const coreGrd = ctx.createRadialGradient(sx, sy, sr*0.1, sx, sy, sr);
+  coreGrd.addColorStop(0, 'rgba(255,255,255,0.95)');
+  coreGrd.addColorStop(0.2, 'rgba(150,200,255,0.8)');
+  coreGrd.addColorStop(0.5, 'rgba(30,136,229,0.5)');
+  coreGrd.addColorStop(0.8, 'rgba(0,50,150,0.2)');
+  coreGrd.addColorStop(1, 'rgba(0,30,100,0)');
+  ctx.fillStyle = coreGrd;
+  ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI*2); ctx.fill();
+
+  // 旋转风纹
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2 + frame * 0.15;
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = ls(0.01);
+    ctx.beginPath();
+    for (let j = 0; j < 20; j++) {
+      const a = angle + j * 0.08;
+      const rd = sr * (0.3 + j * 0.035);
+      const px = sx + Math.cos(a) * rd;
+      const py = sy + Math.sin(a) * rd;
+      if (j === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// 烟雾弹
+function spawnSmoke(x, y, count) {
+  for (let i = 0; i < count; i++) {
+    smokeParticles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 0.06,
+      vy: (Math.random() - 0.5) * 0.04 - 0.01,
+      life: 1, decay: Math.random() * 0.03 + 0.015,
+      radius: Math.random() * 0.12 + 0.05
+    });
+  }
+  // 同时生成手里剑粒子
+  for (let i = 0; i < 8; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 0.07 + 0.02;
+    kunais.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1, decay: Math.random() * 0.025 + 0.01,
+      rotation: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 0.3,
+      size: Math.random() * 0.06 + 0.03
+    });
+  }
+}
+
+// 雷切/千鸟特效
+function drawChidori(cx, cy, alpha) {
+  const sx = lx(cx), sy = ly(cy);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  for (let i = 0; i < 6; i++) {
+    const offset = (Math.random() - 0.5) * ls(0.15);
+    ctx.strokeStyle = `rgba(150,220,255,${0.5 + Math.random()*0.5})`;
+    ctx.lineWidth = ls(0.008);
+    ctx.beginPath();
+    ctx.moveTo(sx + offset, sy - ls(0.3));
+    ctx.lineTo(sx + offset, sy + ls(0.3));
+    ctx.stroke();
+  }
+  // 核心光
+  const chidoriGrd = ctx.createRadialGradient(sx, sy, 0, sx, sy, ls(0.25));
+  chidoriGrd.addColorStop(0, 'rgba(255,255,255,0.9)');
+  chidoriGrd.addColorStop(0.3, 'rgba(150,220,255,0.6)');
+  chidoriGrd.addColorStop(1, 'rgba(0,100,200,0)');
+  ctx.fillStyle = chidoriGrd;
+  ctx.beginPath(); ctx.arc(sx, sy, ls(0.25), 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+// 忍者卷轴
+function drawScroll(yOffset) {
+  const sx = W/2, sy = H/2 + ls(yOffset);
+  const scrollW = ls(1.2), scrollH = ls(1.6);
+
+  // 卷轴纸张
+  ctx.fillStyle = '#f5e6c8';
+  ctx.fillRect(sx - scrollW/2, sy - scrollH/2, scrollW, Math.min(scrollH, scrollUnfurl * scrollH));
+
+  if (scrollUnfurl > 0.05) {
+    // 卷轴轴
+    const topY = sy - scrollH/2;
+    ctx.fillStyle = '#8d6e63';
+    ctx.fillRect(sx - scrollW/2 - ls(0.06), topY, scrollW + ls(0.12), ls(0.07));
+    ctx.fillStyle = '#5d4037';
+    ctx.fillRect(sx - scrollW/2 - ls(0.03), topY - ls(0.02), scrollW + ls(0.06), ls(0.04));
+
+    // 底部轴
+    const botY = sy - scrollH/2 + scrollUnfurl * scrollH;
+    if (scrollUnfurl > 0.3) {
+      ctx.fillStyle = '#8d6e63';
+      ctx.fillRect(sx - scrollW/2 - ls(0.06), botY - ls(0.03), scrollW + ls(0.12), ls(0.07));
+      ctx.fillStyle = '#5d4037';
+      ctx.fillRect(sx - scrollW/2 - ls(0.03), botY + ls(0.04), scrollW + ls(0.06), ls(0.04));
+    }
+  }
+
+  // 卷轴上的文字
+  if (scrollUnfurl > 0.1) {
+    const textAlpha = Math.min(1, (scrollUnfurl - 0.1) * 3);
+    ctx.fillStyle = `rgba(50,30,10,${textAlpha})`;
+    ctx.textAlign = 'center';
+    ctx.font = `bold ${ls(0.14)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('🔥 忍界召集令 🔥', sx, sy - ls(0.35));
+
+    ctx.font = `${ls(0.1)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    const lines = [
+      '兹召唤 木叶隐村 上忍',
+      '—— 张 子 皓 ——',
+      '即刻前往 火影忍者 战场',
+      '与同伴并肩作战！',
+      '',
+      '✊ 点击卷轴接受任务 ✊'
+    ];
+    for (let i = 0; i < lines.length; i++) {
+      if (scrollUnfurl * scrollH > (0.2 + i * 0.12) * scrollH) {
+        const lAlpha = Math.min(1, (scrollUnfurl - 0.15 - i * 0.04) * 4);
+        ctx.fillStyle = `rgba(50,30,10,${lAlpha})`;
+        if (i === 1) ctx.font = `bold ${ls(0.12)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+        else ctx.font = `${ls(0.095)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+        ctx.fillText(lines[i], sx, sy - ls(0.05) + i * ls(0.16));
+      }
+    }
+  }
+}
+
+// ==================== 场景: 通灵术 ====================
+function drawSummoningCircle(progress) {
+  const cx = W/2, cy = H/2 - ls(0.3);
+  const r = ls(0.6 + progress * 0.3);
+
+  // 外圈旋转
+  ctx.strokeStyle = '#ff6d00';
+  ctx.lineWidth = ls(0.02);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, frame * 0.02, frame * 0.02 + Math.PI * 2);
+  ctx.stroke();
+
+  // 内圈反向旋转
+  ctx.strokeStyle = '#ffab00';
+  ctx.lineWidth = ls(0.015);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.85, -frame * 0.025, -frame * 0.025 + Math.PI * 2);
+  ctx.stroke();
+
+  // 忍字印记
+  const markAlpha = 0.3 + progress * 0.6;
+  ctx.fillStyle = `rgba(255,100,0,${markAlpha})`;
+  ctx.font = `bold ${ls(0.5 + progress*0.4)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('忍', cx, cy + ls(0.15));
+
+  // 查克拉火焰
+  for (let i = 0; i < 12; i++) {
+    const angle = (i / 12) * Math.PI * 2 + frame * 0.03;
+    const fx = cx + Math.cos(angle) * r;
+    const fy = cy + Math.sin(angle) * r;
+    const flameH = ls(0.08 + progress * 0.12) * (0.6 + 0.4 * Math.sin(frame * 0.1 + i));
+    const flameGrd = ctx.createLinearGradient(fx, fy, fx, fy - flameH);
+    flameGrd.addColorStop(0, `rgba(255,150,0,${0.7+progress*0.3})`);
+    flameGrd.addColorStop(1, 'rgba(255,50,0,0)');
+    ctx.fillStyle = flameGrd;
+    ctx.beginPath();
+    ctx.moveTo(fx - ls(0.03), fy);
+    ctx.quadraticCurveTo(fx, fy - flameH * 1.3, fx + ls(0.03), fy);
+    ctx.fill();
+  }
+}
+
+// ==================== 鼠标交互 ====================
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const sX = W / rect.width, sY = H / rect.height;
+  const cx = ((e.clientX - rect.left) * sX) / W * 4 - 2;
+  const cy = 2 - ((e.clientY - rect.top) * sY) / H * 4;
+
+  clickCount++;
+  totalClicks++;
+  chakraGlow = Math.min(1, chakraGlow + 0.25);
+
+  if (scene === 0) {
+    // 卷轴展开
+    if (scrollUnfurl < 1) {
+      scrollUnfurl = Math.min(1, scrollUnfurl + 0.18);
+    } else if (clickCount >= 5) {
+      scene = 1; sceneTransition = 0; clickCount = 0; frame = 0;
+      spawnSmoke(cx, cy, 30);
+    }
+  } else if (scene === 1) {
+    // 忍术修炼 - 每次点击触发不同忍术
+    spawnSmoke(cx, cy, 15);
+    rasengans.push({ x: cx, y: cy, life: 1, decay: 0.025, size: 0.1 + Math.random() * 0.2 });
+    if (clickCount >= 8) {
+      scene = 2; sceneTransition = 0; clickCount = 0; frame = 0;
+      spawnSmoke(0, 0, 50);
+      summonProgress = 0;
+    }
+  } else if (scene === 2) {
+    // 通灵术 - 点击增加进度
+    summonProgress = Math.min(1, summonProgress + 0.06);
+    spawnSmoke(cx, cy, 10);
+    if (summonProgress >= 1 && clickCount >= 3) {
+      scene = 3; sceneTransition = 0; clickCount = 0; frame = 0;
+      spawnSmoke(0, 0, 60);
+    }
+  } else if (scene === 3) {
+    // 集结完成 - 点击庆祝
+    spawnSmoke(cx, cy, 20);
+    for (let i = 0; i < 5; i++) {
+      rasengans.push({
+        x: cx + (Math.random()-0.5)*0.5,
+        y: cy + (Math.random()-0.5)*0.5,
+        life: 1, decay: 0.03,
+        size: 0.08 + Math.random() * 0.2
+      });
+    }
+  }
+});
+
+// 触摸支持
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const sX = W / rect.width, sY = H / rect.height;
+  const cx = ((e.changedTouches[0].clientX - rect.left) * sX) / W * 4 - 2;
+  const cy = 2 - ((e.changedTouches[0].clientY - rect.top) * sY) / H * 4;
+
+  clickCount++; totalClicks++; chakraGlow = Math.min(1, chakraGlow + 0.25);
+
+  if (scene === 0) {
+    if (scrollUnfurl < 1) scrollUnfurl = Math.min(1, scrollUnfurl + 0.18);
+    else if (clickCount >= 5) { scene = 1; sceneTransition = 0; clickCount = 0; frame = 0; spawnSmoke(cx, cy, 30); }
+  } else if (scene === 1) {
+    spawnSmoke(cx, cy, 15);
+    rasengans.push({ x: cx, y: cy, life: 1, decay: 0.025, size: 0.1 + Math.random() * 0.2 });
+    if (clickCount >= 8) { scene = 2; sceneTransition = 0; clickCount = 0; frame = 0; spawnSmoke(0, 0, 50); summonProgress = 0; }
+  } else if (scene === 2) {
+    summonProgress = Math.min(1, summonProgress + 0.06);
+    spawnSmoke(cx, cy, 10);
+    if (summonProgress >= 1 && clickCount >= 3) { scene = 3; sceneTransition = 0; clickCount = 0; frame = 0; spawnSmoke(0, 0, 60); }
+  } else if (scene === 3) {
+    spawnSmoke(cx, cy, 20);
+    for (let i = 0; i < 5; i++) {
+      rasengans.push({ x: cx+(Math.random()-0.5)*0.5, y: cy+(Math.random()-0.5)*0.5, life: 1, decay: 0.03, size: 0.08+Math.random()*0.2 });
+    }
+  }
+});
+
+// ==================== 主循环 ====================
+function render() {
+  frame++;
+  chakraGlow = Math.max(0, chakraGlow - 0.012);
+  if (sceneTransition < 1) sceneTransition = Math.min(1, sceneTransition + 0.03);
+  sharinganRotation += 0.02;
+
+  // ---- 背景 ----
+  const bgGrd = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, ls(2.5));
+  if (scene === 3) {
+    bgGrd.addColorStop(0, '#2a1030'); bgGrd.addColorStop(0.6, '#150a1a'); bgGrd.addColorStop(1, '#050508');
+  } else {
+    bgGrd.addColorStop(0, '#1a1520'); bgGrd.addColorStop(0.5, '#0e0c15'); bgGrd.addColorStop(1, '#050510');
+  }
+  ctx.fillStyle = bgGrd;
+  ctx.fillRect(0, 0, W, H);
+
+  // 查克拉能量场
+  if (chakraGlow > 0.01 || scene === 3) {
+    const chakraGrd = ctx.createRadialGradient(W/2, H/2, ls(0.3), W/2, H/2, ls(2));
+    const alpha = scene === 3 ? 0.06 + 0.03*Math.sin(frame*0.03) : chakraGlow * 0.07;
+    chakraGrd.addColorStop(0, `rgba(255,150,0,${alpha})`);
+    chakraGrd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = chakraGrd;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // ---- 忍者星空 ----
+  for (const s of ninjaStars) {
+    const twinkle = 0.3 + 0.7 * Math.abs(Math.sin(frame * s.speed + s.phase));
+    ctx.fillStyle = s.twinkle
+      ? `rgba(255,150,0,${0.7*twinkle})`
+      : `rgba(200,200,255,${0.5*twinkle})`;
+    ctx.beginPath();
+    if (s.twinkle) {
+      // 手里剑形状
+      const sx = lx(s.x), sy = ly(s.y), sr = ls(0.008)*s.size*twinkle;
+      for (let p = 0; p < 4; p++) {
+        const a = p * Math.PI/2 + frame*0.01;
+        ctx.moveTo(sx + Math.cos(a)*sr*2, sy + Math.sin(a)*sr*2);
+        ctx.lineTo(sx + Math.cos(a+0.5)*sr, sy + Math.sin(a+0.5)*sr);
+        ctx.lineTo(sx + Math.cos(a-0.5)*sr, sy + Math.sin(a-0.5)*sr);
+      }
+      ctx.fill();
+    } else {
+      ctx.arc(lx(s.x), ly(s.y), Math.max(0.3, ls(0.003)*s.size*twinkle), 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // ---- 烟雾粒子 ----
+  for (let i = smokeParticles.length - 1; i >= 0; i--) {
+    const sm = smokeParticles[i];
+    sm.x += sm.vx; sm.y += sm.vy; sm.life -= sm.decay;
+    if (sm.life <= 0) { smokeParticles.splice(i,1); continue; }
+    const smGrd = ctx.createRadialGradient(lx(sm.x), ly(sm.y), 0, lx(sm.x), ly(sm.y), ls(sm.radius));
+    smGrd.addColorStop(0, `rgba(200,200,200,${sm.life*0.6})`);
+    smGrd.addColorStop(0.5, `rgba(150,150,150,${sm.life*0.3})`);
+    smGrd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = smGrd;
+    ctx.beginPath();
+    ctx.arc(lx(sm.x), ly(sm.y), ls(sm.radius), 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // ---- 手里剑 ----
+  for (let i = kunais.length - 1; i >= 0; i--) {
+    const k = kunais[i];
+    k.x += k.vx; k.y += k.vy; k.vy -= 0.001; k.life -= k.decay; k.rotation += k.rotSpeed;
+    if (k.life <= 0) { kunais.splice(i,1); continue; }
+    ctx.save();
+    ctx.translate(lx(k.x), ly(k.y));
+    ctx.rotate(k.rotation);
+    ctx.fillStyle = `rgba(180,180,200,${k.life})`;
+    const ks = ls(k.size);
+    ctx.fillRect(-ks*2, -ks*0.3, ks*4, ks*0.6);
+    ctx.fillRect(-ks*0.3, -ks*2, ks*0.6, ks*4);
+    ctx.restore();
+  }
+
+  // ---- 螺旋丸 ----
+  for (let i = rasengans.length - 1; i >= 0; i--) {
+    const rg = rasengans[i];
+    rg.life -= rg.decay;
+    if (rg.life <= 0) { rasengans.splice(i,1); continue; }
+    drawRasengan(rg.x, rg.y, rg.size * rg.life, rg.life);
+  }
+
+  const ta = sceneTransition;
+
+  // ==================== 场景 0: 忍界召集令 (卷轴) ====================
+  if (scene === 0) {
+    // 背景写轮眼
+    drawSharingan(1.1, 0.65, 0.22, sharinganRotation);
+    drawSharingan(-1.1, 0.6, 0.2, -sharinganRotation);
+
+    // 卷轴自动展开
+    if (frame > 30 && scrollUnfurl < 0.3 && clickCount === 0) {
+      scrollUnfurl = Math.min(0.3, scrollUnfurl + 0.008);
+    }
+    drawScroll(-0.1);
+
+    // 标题
+    ctx.textAlign = 'center';
+    const titleAlpha = 0.8 + 0.2 * Math.sin(frame * 0.04);
+    for (let i = 2; i >= 0; i--) {
+      const off = (i-1)*ls(0.005);
+      ctx.fillStyle = i === 1
+        ? `rgba(255,152,0,${titleAlpha})`
+        : `rgba(255,200,100,${titleAlpha*0.3})`;
+      ctx.font = `bold ${ls(0.28)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      ctx.fillText('🔥 忍界召集令 🔥', W/2 + off, ly(1.35) + off);
+    }
+
+    const hint = scrollUnfurl < 1 ? '点击卷轴展开' : '继续点击接受任务！';
+    hintEl.textContent = hint;
+  }
+
+  // ==================== 场景 1: 忍术修炼 ====================
+  else if (scene === 1) {
+    // 写轮眼背景
+    drawSharingan(1.2, 0.75, 0.25, sharinganRotation);
+    drawSharingan(-1.2, 0.7, 0.23, -sharinganRotation);
+
+    // 标题
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,152,0,0.9)';
+    ctx.font = `bold ${ls(0.22)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('⚡ 忍术修炼场 ⚡', W/2, ly(1.35));
+
+    // 千鸟特效
+    drawChidori(0, 0.1, 0.4 + 0.3 * Math.sin(frame * 0.1));
+
+    // 螺旋丸在手中
+    drawRasengan(0, -0.15, 0.15 + 0.03 * Math.sin(frame * 0.12), 0.85);
+
+    // 漂浮的忍者文字
+    for (let i = 0; i < 5; i++) {
+      const nx = (Math.sin(frame * 0.02 + i * 1.3)) * 0.8;
+      const ny = -0.6 + i * 0.25 + Math.sin(frame * 0.025 + i) * 0.15;
+      ctx.fillStyle = `rgba(255,200,100,${0.3 + 0.3*Math.sin(frame*0.05+i)})`;
+      ctx.font = `${ls(0.12)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(ninjaSymbols[i], lx(nx), ly(ny));
+    }
+
+    // 说明
+    ctx.fillStyle = 'rgba(255,200,150,0.7)';
+    ctx.font = `${ls(0.1)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('疯狂点击屏幕 · 修炼忍术！', W/2, ly(-1.15));
+
+    // 进度条
+    const prog = Math.min(1, clickCount / 8);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(W/2 - ls(0.6), ly(-1.35), ls(1.2), ls(0.06));
+    const progGrd = ctx.createLinearGradient(W/2 - ls(0.6), 0, W/2 + ls(0.6), 0);
+    progGrd.addColorStop(0, '#ff6d00');
+    progGrd.addColorStop(0.5, '#ffab00');
+    progGrd.addColorStop(1, '#ff6d00');
+    ctx.fillStyle = progGrd;
+    ctx.fillRect(W/2 - ls(0.6), ly(-1.35), ls(1.2) * prog, ls(0.06));
+
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.font = `${ls(0.08)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText(`查克拉: ${Math.floor(prog*100)}%`, W/2, ly(-1.5));
+
+    hintEl.textContent = `已修炼 ${clickCount}/8 次忍术`;
+  }
+
+  // ==================== 场景 2: 通灵之术 ====================
+  else if (scene === 2) {
+    drawSummoningCircle(summonProgress);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,152,0,0.9)';
+    ctx.font = `bold ${ls(0.2)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('🌀 通灵之术 🌀', W/2, ly(1.35));
+
+    ctx.fillStyle = 'rgba(255,200,150,0.7)';
+    ctx.font = `${ls(0.1)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('点击注入查克拉 · 召唤张子皓！', W/2, ly(1.05));
+
+    // 进度条
+    const prog2 = Math.min(1, summonProgress);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(W/2 - ls(0.6), ly(-1.35), ls(1.2), ls(0.06));
+    const progGrd2 = ctx.createLinearGradient(W/2 - ls(0.6), 0, W/2 + ls(0.6), 0);
+    progGrd2.addColorStop(0, '#ff3d00');
+    progGrd2.addColorStop(0.5, '#ff9100');
+    progGrd2.addColorStop(1, '#ff3d00');
+    ctx.fillStyle = progGrd2;
+    ctx.fillRect(W/2 - ls(0.6), ly(-1.35), ls(1.2) * prog2, ls(0.06));
+
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.font = `${ls(0.08)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText(`通灵进度: ${Math.floor(prog2*100)}%`, W/2, ly(-1.5));
+
+    hintEl.textContent = summonProgress >= 1 ? '继续点击完成通灵！' : '点击召唤！';
+  }
+
+  // ==================== 场景 3: 集结完成！ ====================
+  else if (scene === 3) {
+    // 庆祝效果
+    const celebPulse = 0.7 + 0.3 * Math.sin(frame * 0.05);
+
+    // 多重影分身效果 - 多个影分身圆圈
+    for (let i = 0; i < 6; i++) {
+      const shadowX = (Math.cos(i * Math.PI/3 + frame*0.015) * 0.5);
+      const shadowY = (Math.sin(i * Math.PI/3 + frame*0.015) * 0.4) - 0.1;
+      ctx.strokeStyle = `rgba(255,150,0,${0.3 + 0.2*Math.sin(frame*0.06+i)})`;
+      ctx.lineWidth = ls(0.012);
+      ctx.setLineDash([ls(0.04), ls(0.02)]);
+      ctx.beginPath();
+      ctx.arc(lx(shadowX), ly(shadowY), ls(0.25), 0, Math.PI*2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // 主角光环
+    const heroGlow = ctx.createRadialGradient(W/2, H/2 - ls(0.1), ls(0.15), W/2, H/2 - ls(0.1), ls(0.9));
+    heroGlow.addColorStop(0, 'rgba(255,200,100,0.25)');
+    heroGlow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = heroGlow;
+    ctx.fillRect(0, 0, W, H);
+
+    // 标题
+    ctx.textAlign = 'center';
+    const titles = [
+      '🎉 通灵成功！！！ 🎉',
+      '张子皓，火影在召唤！',
+      '快来一起玩火影忍者！',
+      '第七班，集合！！！'
+    ];
+    const titleIdx = Math.min(titles.length-1, Math.floor(frame/60));
+    const title = titles[titleIdx];
+
+    for (let i = 3; i >= 0; i--) {
+      const off = i === 0 ? 0 : (i%2===0?1:-1)*ls(0.005)*(i+1);
+      ctx.fillStyle = i === 0
+        ? 'rgba(255,255,255,0.95)'
+        : `rgba(255,150,0,0.3)`;
+      ctx.font = `bold ${ls(0.26)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      if (i === 0) { ctx.shadowColor = 'rgba(255,150,0,0.7)'; ctx.shadowBlur = ls(0.1); }
+      else ctx.shadowBlur = 0;
+      ctx.fillText(title, W/2 + off, ly(1.2) + off);
+    }
+    ctx.shadowBlur = 0;
+
+    // 子标题
+    if (titleIdx >= 1) {
+      ctx.fillStyle = 'rgba(255,200,100,0.8)';
+      ctx.font = `${ls(0.13)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      ctx.fillText('⚔️ 忍者大战 · 一触即发 ⚔️', W/2, ly(0.8));
+    }
+
+    // 三个小忍者头像
+    const heads = ['🦊', '🐺', '🐍'];
+    for (let h = 0; h < 3; h++) {
+      const hx = lx(-0.5 + h * 0.5);
+      const hy = ly(0) + Math.sin(frame*0.06 + h)*ls(0.08);
+      ctx.font = `${ls(0.22)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      ctx.fillText(heads[h], hx, hy);
+    }
+
+    // 持续螺旋丸爆发
+    if (frame % 10 === 0) {
+      for (let i = 0; i < 3; i++) {
+        rasengans.push({
+          x: (Math.random()-0.5)*1.2,
+          y: (Math.random()-0.5)*0.8,
+          life: 1, decay: 0.02,
+          size: 0.08 + Math.random()*0.15
+        });
+      }
+    }
+
+    // 底部消息
+    const msgAlpha = 0.6 + 0.3 * Math.sin(frame * 0.04);
+    ctx.fillStyle = `rgba(255,200,150,${msgAlpha})`;
+    ctx.font = `${ls(0.11)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('点击继续放忍术！🔥 快上号！', W/2, ly(-1.45));
+
+    hintEl.textContent = `已释放 ${totalClicks} 次忍术 | 张子皓，就差你了！`;
+  }
+
+  requestAnimationFrame(render);
+}
+
+// 初始烟雾开场
+spawnSmoke(0, 0, 25);
+hintEl.textContent = '点击屏幕开始 →';
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
