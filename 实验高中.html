@@ -173,75 +173,217 @@ function drawChenShujie(cx, cy, scale, expression) {
   const sx=lx(cx), sy=ly(cy), s=ls(scale);
   ctx.save();ctx.translate(sx,sy);
 
-  // 身体
-  const bodyGrd=ctx.createLinearGradient(0,-s*0.1,0,s*0.4);
-  bodyGrd.addColorStop(0,'#ff6b9d');bodyGrd.addColorStop(1,'#e91e63');
-  ctx.fillStyle=bodyGrd;
-  ctx.beginPath();ctx.ellipse(0,s*0.1,s*0.3,s*0.45,0,0,Math.PI*2);ctx.fill();
+  // ---- 影子 ----
+  ctx.fillStyle='rgba(0,0,0,0.12)';
+  ctx.beginPath();ctx.ellipse(0,s*0.88,s*0.35,s*0.06,0,0,Math.PI*2);ctx.fill();
 
-  // 领结
+  // ---- 腿部 (在身体后面) ----
+  // 白色过膝袜
   ctx.fillStyle='#fff';
-  ctx.beginPath();ctx.moveTo(0,-s*0.05);ctx.lineTo(-s*0.08,s*0.02);ctx.lineTo(0,s*0.03);ctx.lineTo(s*0.08,s*0.02);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.roundRect(-s*0.2,s*0.58,s*0.14,s*0.28,s*0.03);ctx.fill();
+  ctx.beginPath();ctx.roundRect(s*0.06,s*0.58,s*0.14,s*0.28,s*0.03);ctx.fill();
+  // 袜子顶部条纹
+  ctx.strokeStyle='#ff80ab';ctx.lineWidth=s*0.02;
+  ctx.beginPath();ctx.moveTo(-s*0.2,s*0.6);ctx.lineTo(-s*0.06,s*0.6);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(s*0.06,s*0.6);ctx.lineTo(s*0.2,s*0.6);ctx.stroke();
+  // 小皮鞋
+  ctx.fillStyle='#3e2723';
+  ctx.beginPath();ctx.roundRect(-s*0.22,s*0.83,s*0.16,s*0.07,s*0.03);ctx.fill();
+  ctx.beginPath();ctx.roundRect(s*0.06,s*0.83,s*0.16,s*0.07,s*0.03);ctx.fill();
 
-  // 腿
-  ctx.strokeStyle='#ffe0c0';ctx.lineWidth=s*0.13;ctx.lineCap='round';
-  ctx.beginPath();ctx.moveTo(-s*0.15,s*0.45);ctx.lineTo(-s*0.2,s*0.85);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(s*0.15,s*0.45);ctx.lineTo(s*0.2,s*0.85);ctx.stroke();
+  // ---- 裙子 (百褶裙) ----
+  ctx.fillStyle='#1a237e';
+  ctx.beginPath();
+  ctx.moveTo(-s*0.32,s*0.35);ctx.lineTo(-s*0.28,s*0.6);
+  ctx.lineTo(-s*0.18,s*0.6);ctx.lineTo(-s*0.22,s*0.35);ctx.closePath();ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(s*0.22,s*0.35);ctx.lineTo(s*0.18,s*0.6);
+  ctx.lineTo(s*0.28,s*0.6);ctx.lineTo(s*0.32,s*0.35);ctx.closePath();ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-s*0.22,s*0.35);ctx.lineTo(-s*0.12,s*0.62);
+  ctx.lineTo(s*0.12,s*0.62);ctx.lineTo(s*0.22,s*0.35);ctx.closePath();ctx.fill();
+  // 裙子褶皱线
+  ctx.strokeStyle='rgba(255,255,255,0.1)';ctx.lineWidth=s*0.01;
+  for(let pl=-1;pl<=1;pl+=0.65){
+    ctx.beginPath();ctx.moveTo(pl*s*0.12,s*0.37);ctx.lineTo(pl*s*0.1,s*0.6);ctx.stroke();
+  }
 
-  // 手臂 (挥手)
-  const armWave=Math.sin(frame*0.1)*s*0.1;
-  ctx.beginPath();ctx.moveTo(s*0.28,-s*0.05);ctx.lineTo(s*0.45,s*0.2+armWave);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(-s*0.28,-s*0.05);ctx.lineTo(-s*0.4,s*0.35);ctx.stroke();
+  // ---- 上半身 (水手服上衣) ----
+  const topGrd=ctx.createLinearGradient(0,-s*0.1,0,s*0.4);
+  topGrd.addColorStop(0,'#ffffff');topGrd.addColorStop(1,'#f5f5f5');
+  ctx.fillStyle=topGrd;
+  ctx.beginPath();
+  ctx.moveTo(-s*0.3,-s*0.08);ctx.quadraticCurveTo(-s*0.32,s*0.2,-s*0.28,s*0.38);
+  ctx.lineTo(s*0.28,s*0.38);ctx.quadraticCurveTo(s*0.32,s*0.2,s*0.3,-s*0.08);
+  ctx.quadraticCurveTo(s*0.16,-s*0.18,0,-s*0.15);
+  ctx.quadraticCurveTo(-s*0.16,-s*0.18,-s*0.3,-s*0.08);
+  ctx.closePath();ctx.fill();
 
-  // 头
+  // 水手领
+  ctx.fillStyle='#1a237e';
+  ctx.beginPath();
+  ctx.moveTo(-s*0.3,-s*0.08);ctx.quadraticCurveTo(-s*0.18,-s*0.22,0,-s*0.18);
+  ctx.quadraticCurveTo(s*0.18,-s*0.22,s*0.3,-s*0.08);
+  ctx.lineTo(s*0.1,s*0.08);ctx.lineTo(0,s*0.02);
+  ctx.lineTo(-s*0.1,s*0.08);ctx.closePath();ctx.fill();
+  // 领子白边
+  ctx.strokeStyle='#fff';ctx.lineWidth=s*0.015;
+  ctx.beginPath();ctx.moveTo(-s*0.3,-s*0.08);ctx.lineTo(-s*0.1,s*0.08);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(s*0.3,-s*0.08);ctx.lineTo(s*0.1,s*0.08);ctx.stroke();
+
+  // 领结/丝带
+  ctx.fillStyle='#e53935';
+  ctx.beginPath();ctx.moveTo(-s*0.07,s*0.01);ctx.lineTo(0,s*0.08);ctx.lineTo(s*0.07,s*0.01);
+  ctx.lineTo(s*0.04,-s*0.03);ctx.lineTo(0,-s*0.01);ctx.lineTo(-s*0.04,-s*0.03);ctx.closePath();ctx.fill();
+  // 丝带下垂
+  ctx.fillStyle='#e53935';
+  ctx.beginPath();ctx.moveTo(-s*0.03,s*0.05);ctx.lineTo(0,s*0.06);ctx.lineTo(0,s*0.2);
+  ctx.lineTo(-s*0.02,s*0.19);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(s*0.03,s*0.05);ctx.lineTo(0,s*0.06);ctx.lineTo(s*0.01,s*0.22);
+  ctx.lineTo(s*0.04,s*0.21);ctx.closePath();ctx.fill();
+
+  // ---- 手臂 ----
+  const armWave=Math.sin(frame*0.08)*s*0.08;
+  // 左臂 (自然下垂)
+  ctx.strokeStyle='#ffe0c0';ctx.lineWidth=s*0.1;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(-s*0.28,s*0.05);ctx.lineTo(-s*0.35,s*0.32);ctx.stroke();
+  // 右臂 (挥手)
+  ctx.beginPath();ctx.moveTo(s*0.28,s*0.05);ctx.lineTo(s*0.38,s*0.18+armWave);ctx.stroke();
+  // 右手掌
   ctx.fillStyle='#ffe0c0';
-  ctx.beginPath();ctx.arc(0,-s*0.4,s*0.38,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(s*0.38,s*0.18+armWave,s*0.06,0,Math.PI*2);ctx.fill();
 
-  // 头发
-  ctx.fillStyle='#2c1810';
-  ctx.beginPath();ctx.arc(0,-s*0.47,s*0.41,Math.PI,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.ellipse(0,-s*0.33,s*0.4,s*0.16,0,0,Math.PI*2);ctx.fill();
-  for(let sd=-1;sd<=1;sd+=2){
-    ctx.beginPath();ctx.ellipse(sd*s*0.33,-s*0.42,s*0.11,s*0.22,sd*0.3,0,Math.PI*2);ctx.fill();
-  }
+  // ---- 头部 ----
+  // 头基座
+  ctx.fillStyle='#ffe0c0';
+  ctx.beginPath();ctx.arc(0,-s*0.36,s*0.36,0,Math.PI*2);ctx.fill();
 
-  // 发饰 - 蝴蝶结
-  ctx.fillStyle='#ff4081';
-  for(let b=-1;b<=1;b+=2){
-    ctx.beginPath();ctx.arc(b*s*0.26,-s*0.78,s*0.09,0,Math.PI*2);ctx.fill();
-  }
-  ctx.beginPath();ctx.arc(0,-s*0.75,s*0.05,0,Math.PI*2);ctx.fill();
+  // ---- 头发后层 ----
+  ctx.fillStyle='#3e1f0d';
+  // 后发 - 垂到肩膀
+  ctx.beginPath();ctx.ellipse(0,-s*0.4,s*0.37,s*0.42,0,0,Math.PI*2);ctx.fill();
+  // 左鬓发
+  ctx.beginPath();ctx.ellipse(-s*0.32,-s*0.38,s*0.1,s*0.28,-0.2,0,Math.PI*2);ctx.fill();
+  // 右鬓发
+  ctx.beginPath();ctx.ellipse(s*0.32,-s*0.38,s*0.1,s*0.28,0.2,0,Math.PI*2);ctx.fill();
 
-  // 眼睛
+  // ---- 头发前层 (刘海) ----
+  ctx.fillStyle='#4a2810';
+  // 主刘海区域
+  ctx.beginPath();ctx.arc(0,-s*0.56,s*0.38,0,Math.PI);ctx.fill();
+  // 刘海碎发 - 左侧
+  ctx.beginPath();ctx.ellipse(-s*0.18,-s*0.5,s*0.13,s*0.22,-0.25,0,Math.PI*2);ctx.fill();
+  // 刘海碎发 - 中间
+  ctx.beginPath();ctx.ellipse(0,-s*0.5,s*0.11,s*0.2,0,0,Math.PI*2);ctx.fill();
+  // 刘海碎发 - 右侧
+  ctx.beginPath();ctx.ellipse(s*0.18,-s*0.5,s*0.13,s*0.22,0.25,0,Math.PI*2);ctx.fill();
+  // 侧发前层
+  ctx.beginPath();ctx.ellipse(-s*0.3,-s*0.42,s*0.09,s*0.22,-0.15,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(s*0.3,-s*0.42,s*0.09,s*0.22,0.15,0,Math.PI*2);ctx.fill();
+
+  // ---- 头发高光 ----
+  ctx.fillStyle='rgba(255,220,200,0.25)';
+  ctx.beginPath();ctx.ellipse(-s*0.06,-s*0.63,s*0.1,s*0.06,-0.1,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(s*0.12,-s*0.58,s*0.06,s*0.04,0.1,0,Math.PI*2);ctx.fill();
+
+  // ---- 呆毛 ----
+  ctx.strokeStyle='#4a2810';ctx.lineWidth=s*0.025;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(0,-s*0.73);
+  ctx.quadraticCurveTo(s*0.06,-s*0.85,s*0.04,-s*0.92);ctx.stroke();
+
+  // ---- 发饰 (小熊发夹+蝴蝶结) ----
+  // 左侧蝴蝶结
+  ctx.fillStyle='#ff80ab';
+  ctx.beginPath();ctx.ellipse(-s*0.28,-s*0.68,s*0.07,s*0.05,-0.3,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(-s*0.22,-s*0.68,s*0.07,s*0.05,0.3,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#ff4081';ctx.beginPath();ctx.arc(-s*0.25,-s*0.68,s*0.03,0,Math.PI*2);ctx.fill();
+  // 右侧小发夹
+  ctx.fillStyle='#ffd700';
+  ctx.beginPath();ctx.arc(s*0.28,-s*0.67,s*0.04,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(s*0.28,-s*0.68,s*0.015,0,Math.PI*2);ctx.fill();
+
+  // ---- 眉毛 ----
+  ctx.strokeStyle='#5d3a1a';ctx.lineWidth=s*0.015;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(-s*0.18,-s*0.48);ctx.quadraticCurveTo(-s*0.1,-s*0.52,-s*0.04,-s*0.5);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(s*0.18,-s*0.48);ctx.quadraticCurveTo(s*0.1,-s*0.52,s*0.04,-s*0.5);ctx.stroke();
+
+  // ---- 眼睛 (动漫大眼睛) ----
   for(let e=-1;e<=1;e+=2){
-    ctx.fillStyle='#fff';
-    ctx.beginPath();ctx.arc(e*s*0.12,-s*0.45,s*0.1,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#222';
-    ctx.beginPath();ctx.arc(e*s*0.12,-s*0.44,s*0.055,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#fff';
-    ctx.beginPath();ctx.arc(e*s*0.105,-s*0.47,s*0.022,0,Math.PI*2);ctx.fill();
+    const ex=e*s*0.1,ey=-s*0.39;
+    if(expression==='wink'&&e===-1){
+      // 眨眼效果 - 左眼闭
+      ctx.strokeStyle='#5d3a1a';ctx.lineWidth=s*0.025;ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(ex-s*0.09,ey);ctx.lineTo(ex+s*0.09,ey);ctx.stroke();
+      // 睫毛
+      for(let l=0;l<3;l++){
+        ctx.beginPath();ctx.moveTo(ex+s*0.05-l*s*0.04,ey);ctx.lineTo(ex+s*0.06-l*s*0.04,ey-s*0.04);ctx.stroke();
+      }
+    }else{
+      // 眼白
+      ctx.fillStyle='#fff';
+      ctx.beginPath();ctx.ellipse(ex,ey,s*0.1,s*0.12,0,0,Math.PI*2);ctx.fill();
+      // 上眼线
+      ctx.strokeStyle='#2c1810';ctx.lineWidth=s*0.02;
+      ctx.beginPath();ctx.ellipse(ex,ey+s*0.005,s*0.1,s*0.12,0,Math.PI,Math.PI*2);ctx.stroke();
+      // 上睫毛
+      ctx.fillStyle='#2c1810';
+      ctx.beginPath();ctx.ellipse(ex,ey-s*0.01,s*0.1,s*0.04,0,0,Math.PI);ctx.fill();
+      // 虹膜 (渐变)
+      const irisGrd=ctx.createRadialGradient(ex,ey,s*0.01,ex,ey,s*0.065);
+      irisGrd.addColorStop(0,'#5c3d2e');irisGrd.addColorStop(0.5,'#7b4d30');irisGrd.addColorStop(1,'#3e2218');
+      ctx.fillStyle=irisGrd;
+      ctx.beginPath();ctx.arc(ex,ey,s*0.06,0,Math.PI*2);ctx.fill();
+      // 瞳孔
+      ctx.fillStyle='#1a0a00';
+      ctx.beginPath();ctx.arc(ex,ey,s*0.035,0,Math.PI*2);ctx.fill();
+      // 主高光 (大)
+      ctx.fillStyle='#fff';
+      ctx.beginPath();ctx.arc(ex-s*0.015,ey-s*0.025,s*0.028,0,Math.PI*2);ctx.fill();
+      // 副高光 (小)
+      ctx.fillStyle='rgba(255,255,255,0.7)';
+      ctx.beginPath();ctx.arc(ex+s*0.025,ey+s*0.015,s*0.012,0,Math.PI*2);ctx.fill();
+    }
   }
 
-  // 嘴巴
+  // ---- 鼻子 ----
+  ctx.fillStyle='rgba(255,180,160,0.4)';
+  ctx.beginPath();ctx.arc(0,-s*0.31,s*0.025,0,Math.PI*2);ctx.fill();
+
+  // ---- 嘴巴 ----
   if(expression==='smile'){
-    ctx.strokeStyle='#e57373';ctx.lineWidth=s*0.025;ctx.beginPath();
-    ctx.arc(0,-s*0.32,s*0.07,0.1,Math.PI-0.1);ctx.stroke();
+    ctx.strokeStyle='#e57373';ctx.lineWidth=s*0.022;ctx.lineCap='round';
+    ctx.beginPath();ctx.arc(0,-s*0.27,s*0.06,0.15,Math.PI-0.15);ctx.stroke();
+    // 小虎牙
+    ctx.fillStyle='#fff';
+    ctx.beginPath();ctx.moveTo(0,-s*0.24);ctx.lineTo(-s*0.01,-s*0.21);ctx.lineTo(s*0.01,-s*0.21);ctx.closePath();ctx.fill();
   }else if(expression==='wink'){
-    ctx.strokeStyle='#e57373';ctx.lineWidth=s*0.025;ctx.beginPath();
-    ctx.arc(0,-s*0.31,s*0.07,0.1,Math.PI-0.1);ctx.stroke();
-    // 左眼眨眼
-    ctx.fillStyle='#ffe0c0';ctx.beginPath();ctx.arc(-s*0.12,-s*0.45,s*0.11,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#222';ctx.lineWidth=s*0.02;ctx.beginPath();
-    ctx.moveTo(-s*0.2,-s*0.45);ctx.lineTo(-s*0.04,-s*0.45);ctx.stroke();
+    // 俏皮的猫嘴
+    ctx.strokeStyle='#e57373';ctx.lineWidth=s*0.022;ctx.lineCap='round';
+    ctx.beginPath();ctx.arc(0,-s*0.27,s*0.05,0.15,Math.PI-0.15);ctx.stroke();
+    // 嘴角上扬
+    ctx.beginPath();ctx.moveTo(-s*0.04,-s*0.265);ctx.lineTo(-s*0.06,-s*0.275);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(s*0.04,-s*0.265);ctx.lineTo(s*0.06,-s*0.275);ctx.stroke();
   }else{
     ctx.fillStyle='#e57373';
-    ctx.beginPath();ctx.arc(0,-s*0.3,s*0.05,0,Math.PI);ctx.fill();
+    ctx.beginPath();ctx.arc(0,-s*0.265,s*0.04,0,Math.PI);ctx.fill();
   }
 
-  // 腮红
+  // ---- 腮红 ----
   for(let bl=-1;bl<=1;bl+=2){
-    ctx.fillStyle='rgba(255,150,150,0.3)';
-    ctx.beginPath();ctx.arc(bl*s*0.2,-s*0.34,s*0.07,0,Math.PI*2);ctx.fill();
+    const blushGrd=ctx.createRadialGradient(bl*s*0.2,-s*0.3,0,bl*s*0.2,-s*0.3,s*0.09);
+    blushGrd.addColorStop(0,'rgba(255,160,160,0.35)');
+    blushGrd.addColorStop(1,'rgba(255,160,160,0)');
+    ctx.fillStyle=blushGrd;
+    ctx.beginPath();ctx.arc(bl*s*0.2,-s*0.3,s*0.09,0,Math.PI*2);ctx.fill();
+  }
+
+  // ---- 小装饰：脸颊爱心 (随机出现) ----
+  if(Math.floor(frame/60)%3===0){
+    ctx.fillStyle='rgba(255,100,130,0.5)';
+    ctx.font=`${s*0.08}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.textAlign='center';
+    ctx.fillText('♡',s*0.28,-s*0.28);
   }
 
   ctx.restore();
