@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文昌高中 - 召唤杨宇恒</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a1a; overflow: hidden;
+  display: flex; justify-content: center; align-items: center;
+  height: 100vh;
+  font-family: 'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif;
+  user-select: none; -webkit-user-select: none;
+}
+canvas { display: block; }
+#reward-overlay {
+  display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9); z-index: 100;
+  justify-content: center; align-items: center; flex-direction: column;
+}
+#reward-overlay img {
+  max-width: 85%; max-height: 70%; border: 4px solid #ffd700;
+  box-shadow: 0 0 50px rgba(255,215,0,0.6); border-radius: 12px;
+  object-fit: contain;
+}
+#reward-overlay .reward-label {
+  color: #ffd700; font-size: 24px; margin-bottom: 12px;
+  font-weight: bold; text-shadow: 0 0 20px rgba(255,215,0,0.5);
+}
+#reward-overlay .close-btn {
+  margin-top: 18px; padding: 12px 40px; background: linear-gradient(135deg,#ffd700,#ff8c00);
+  color: #1a1a2e; border: none; border-radius: 8px; font-size: 18px; cursor: pointer;
+  font-weight: bold; font-family: 'Microsoft YaHei','PingFang SC',sans-serif;
+}
+#reward-overlay .close-btn:hover { transform: scale(1.05); }
+#hint {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  color: #ffd700; font-size: 14px; pointer-events: none; opacity: 0.8;
+  text-align: center; font-family: 'Microsoft YaHei','PingFang SC',sans-serif; z-index: 10;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint"></div>
+<div id="reward-overlay">
+  <div class="reward-label" id="reward-label">🎁 奖励来啦！</div>
+  <img id="reward-img" src="" alt="奖励">
+  <button class="close-btn" onclick="closeReward()">收下奖励，继续！</button>
+</div>
+<script>
+// ==================== 文昌高中 · 召唤杨宇恒 ====================
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const hintEl = document.getElementById('hint');
+const rewardOverlay = document.getElementById('reward-overlay');
+const rewardImg = document.getElementById('reward-img');
+const rewardLabel = document.getElementById('reward-label');
+const W = 800, H = 800;
+canvas.width = W; canvas.height = H;
+
+function resize() {
+  const scale = Math.min(window.innerWidth / W, window.innerHeight / H);
+  canvas.style.width = W * scale + 'px';
+  canvas.style.height = H * scale + 'px';
+}
+resize(); window.addEventListener('resize', resize);
+
+function lx(x) { return (x + 2) / 4 * W; }
+function ly(y) { return (2 - y) / 4 * H; }
+function ls(s) { return s / 4 * W; }
+
+// ==================== 状态 ====================
+let scene = 0;
+// 0=校门迎新, 1=第一波诱惑, 2=第二波诱惑, 3=第三波诱惑, 4=第四波诱惑, 5=终极抉择
+let frame = 0;
+let sceneStartFrame = 0;
+let particles = [];
+let cherryBlossoms = [];
+let sparkles = [];
+let pulseRings = [];
+let btnNoX = 0.5, btnNoY = -0.9;
+const btnYesX = -0.45, btnYesY = -0.9;
+let totalAgrees = 0;
+let rewardShown = false;
+let bellRings = [];
+
+const rewardImages = ['reward1.jpg', 'reward2.jpg', 'reward3.jpg', 'reward4.jpg'];
+const rewardLabels = [
+  '🎁 第一份奖励！文昌等你！',
+  '🎁 第二份奖励！越来越心动！',
+  '🎁 第三份奖励！欲罢不能！',
+  '🎁 第四份奖励！就差你了！'
+];
+
+// 文昌高中配色
+const SCHOOL_BLUE = '#1565c0';
+const SCHOOL_GOLD = '#ffd700';
+const SCHOOL_WHITE = '#f5f5f5';
+
+// ==================== 背景 ====================
+const bgStars = [];
+for (let i = 0; i < 100; i++) {
+  bgStars.push({
+    x: Math.random() * 4 - 2, y: Math.random() * 4 - 2,
+    size: Math.random() * 2 + 0.2,
+    phase: Math.random() * Math.PI * 2,
+    speed: Math.random() * 0.03 + 0.008
+  });
+}
+
+// ==================== 特效 ====================
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 0.08 + 0.02;
+    particles.push({
+      x, y, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
+      life: 1, decay: Math.random()*0.022+0.01,
+      color, size: Math.random()*7+2
+    });
+  }
+  pulseRings.push({ x, y, r: 0.05, alpha: 1, color });
+}
+
+function spawnCherryBlossom() {
+  return {
+    x: Math.random() * 4 - 2,
+    y: 2.2,
+    vy: -(Math.random() * 0.015 + 0.008),
+    vx: (Math.random() - 0.5) * 0.012,
+    sway: Math.random() * Math.PI * 2,
+    swaySpeed: Math.random() * 0.03 + 0.015,
+    size: Math.random() * 0.05 + 0.03,
+    rotation: Math.random() * Math.PI * 2,
+    rotSpeed: (Math.random() - 0.5) * 0.04,
+    life: 1
+  };
+}
+
+function hexToRgba(hex, a) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// ==================== 按钮 ====================
+function drawSchoolButton(x, y, w, h, text, color, alpha, glowIntensity) {
+  const bx = lx(x), by = ly(y), bw = ls(w), bh = ls(h);
+  if (glowIntensity > 0) {
+    ctx.shadowColor = color; ctx.shadowBlur = ls(0.07) * glowIntensity;
+  }
+  ctx.fillStyle = hexToRgba(color, alpha);
+  ctx.beginPath();
+  const br = ls(0.035);
+  roundRect(bx - bw/2, by - bh/2, bw, bh, br); ctx.fill();
+  ctx.strokeStyle = hexToRgba('#ffffff', Math.min(1, alpha + 0.25));
+  ctx.lineWidth = ls(0.01);
+  roundRect(bx - bw/2, by - bh/2, bw, bh, br); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  roundRect(bx - bw/2 + ls(0.02), by + bh/2 - ls(0.03), bw - ls(0.04), bh*0.3, ls(0.015)); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${ls(0.1)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText(text, bx, by + ls(0.035));
+  return {x: bx, y: by, w: bw, h: bh};
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+// ==================== 奖励弹窗 ====================
+let pendingNextScene = -1;
+function showReward(imgSrc, label, nextScene) {
+  rewardImg.src = imgSrc;
+  rewardLabel.textContent = label;
+  rewardOverlay.style.display = 'flex';
+  pendingNextScene = nextScene;
+}
+function closeReward() {
+  rewardOverlay.style.display = 'none';
+  if (pendingNextScene >= 0) {
+    scene = pendingNextScene;
+    sceneStartFrame = frame;
+    btnNoX = 0.5; btnNoY = -0.9;
+    spawnParticles(0, 0.1, SCHOOL_GOLD, 30);
+    pendingNextScene = -1;
+    rewardShown = false;
+  }
+}
+window.closeReward = closeReward;
+
+// ==================== 鼠标 ====================
+let mouseX = -999, mouseY = -999;
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const sX = W / rect.width, sY = H / rect.height;
+  mouseX = ((e.clientX - rect.left) * sX) / W * 4 - 2;
+  mouseY = 2 - ((e.clientY - rect.top) * sY) / H * 4;
+  if (scene >= 1 && scene <= 5 && !rewardShown) {
+    if (Math.abs(mouseX - btnNoX) < 0.3 && Math.abs(mouseY - btnNoY) < 0.15) {
+      for (let i = 0; i < 50; i++) {
+        const nx = Math.random() * 1.6 - 0.8;
+        const ny = Math.random() * 0.7 - 1.2;
+        if (Math.abs(nx - btnYesX) > 0.45 || Math.abs(ny - btnYesY) > 0.2) {
+          btnNoX = nx; btnNoY = ny; break;
+        }
+      }
+    }
+  }
+});
+
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const sX = W / rect.width, sY = H / rect.height;
+  const cx = ((e.clientX - rect.left) * sX) / W * 4 - 2;
+  const cy = 2 - ((e.clientY - rect.top) * sY) / H * 4;
+
+  spawnParticles(cx, cy, SCHOOL_GOLD, 6);
+
+  if (scene === 0 && frame - sceneStartFrame > 30) {
+    spawnParticles(0, 0.1, SCHOOL_BLUE, 25);
+    pendingNextScene = 1; sceneStartFrame = frame; scene = 1; btnNoX = 0.5; btnNoY = -0.9;
+    rewardShown = false;
+  } else if (scene >= 1 && scene <= 4 && !rewardShown) {
+    if (Math.abs(cx - btnYesX) < 0.3 && Math.abs(cy - btnYesY) < 0.16) {
+      totalAgrees++;
+      spawnParticles(btnYesX, btnYesY, SCHOOL_GOLD, 35);
+      rewardShown = true;
+      const imgIdx = scene - 1;
+      setTimeout(() => showReward(rewardImages[imgIdx], rewardLabels[imgIdx], scene + 1), 350);
+    }
+    if (Math.abs(cx - btnNoX) < 0.3 && Math.abs(cy - btnNoY) < 0.16) {
+      spawnParticles(btnNoX, btnNoY, '#666', 12);
+      btnNoX = Math.random() * 1.6 - 0.8;
+      btnNoY = Math.random() * 0.7 - 1.2;
+    }
+  } else if (scene === 5 && !rewardShown) {
+    if (Math.abs(cx - btnYesX) < 0.3 && Math.abs(cy - btnYesY) < 0.16) {
+      totalAgrees++;
+      spawnParticles(btnYesX, btnYesY, SCHOOL_GOLD, 50);
+      spawnParticles(btnYesX, btnYesY, '#ff6d00', 30);
+      rewardShown = true;
+      setTimeout(() => showReward('ultimate.jpg', '🏆 终极大奖！文昌高中欢迎你！🏆', 6), 400);
+    }
+    if (Math.abs(cx - btnNoX) < 0.3 && Math.abs(cy - btnNoY) < 0.16) {
+      spawnParticles(btnNoX, btnNoY, '#666', 12);
+      btnNoX = Math.random() * 1.6 - 0.8;
+      btnNoY = Math.random() * 0.7 - 1.2;
+    }
+  } else if (scene === 6) {
+    spawnParticles(cx, cy, SCHOOL_GOLD, 15);
+  }
+});
+
+// 触摸
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const sX = W / rect.width, sY = H / rect.height;
+  mouseX = ((e.touches[0].clientX - rect.left) * sX) / W * 4 - 2;
+  mouseY = 2 - ((e.touches[0].clientY - rect.top) * sY) / H * 4;
+  if (scene >= 1 && scene <= 5 && !rewardShown) {
+    if (Math.abs(mouseX - btnNoX) < 0.32 && Math.abs(mouseY - btnNoY) < 0.17) {
+      for (let i=0;i<50;i++){const nx=Math.random()*1.6-0.8;const ny=Math.random()*0.7-1.2;if(Math.abs(nx-btnYesX)>0.45||Math.abs(ny-btnYesY)>0.2){btnNoX=nx;btnNoY=ny;break;}}
+    }
+  }
+},{passive:false});
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const sX = W / rect.width, sY = H / rect.height;
+  const cx = ((e.changedTouches[0].clientX - rect.left) * sX) / W * 4 - 2;
+  const cy = 2 - ((e.changedTouches[0].clientY - rect.top) * sY) / H * 4;
+  spawnParticles(cx, cy, SCHOOL_GOLD, 6);
+  if (scene === 0 && frame - sceneStartFrame > 30) {
+    spawnParticles(0,0.1,SCHOOL_BLUE,25);
+    pendingNextScene=1;sceneStartFrame=frame;scene=1;btnNoX=0.5;btnNoY=-0.9;rewardShown=false;
+  } else if (scene>=1&&scene<=4&&!rewardShown) {
+    if(Math.abs(cx-btnYesX)<0.33&&Math.abs(cy-btnYesY)<0.18){
+      totalAgrees++;spawnParticles(btnYesX,btnYesY,SCHOOL_GOLD,35);rewardShown=true;
+      const imgIdx=scene-1;
+      setTimeout(()=>showReward(rewardImages[imgIdx],rewardLabels[imgIdx],scene+1),350);
+    }
+    if(Math.abs(cx-btnNoX)<0.33&&Math.abs(cy-btnNoY)<0.18){spawnParticles(btnNoX,btnNoY,'#666',12);btnNoX=Math.random()*1.6-0.8;btnNoY=Math.random()*0.7-1.2;}
+  } else if(scene===5&&!rewardShown){
+    if(Math.abs(cx-btnYesX)<0.33&&Math.abs(cy-btnYesY)<0.18){
+      totalAgrees++;spawnParticles(btnYesX,btnYesY,SCHOOL_GOLD,50);rewardShown=true;
+      setTimeout(()=>showReward('ultimate.jpg','🏆 终极大奖！文昌高中欢迎你！🏆',6),400);
+    }
+    if(Math.abs(cx-btnNoX)<0.33&&Math.abs(cy-btnNoY)<0.18){spawnParticles(btnNoX,btnNoY,'#666',12);btnNoX=Math.random()*1.6-0.8;btnNoY=Math.random()*0.7-1.2;}
+  } else if(scene===6){spawnParticles(cx,cy,SCHOOL_GOLD,15);}
+});
+
+// ==================== 主循环 ====================
+function render() {
+  frame++;
+  if (scene >= 1) totalAgrees = totalAgrees; // keep
+
+  // 背景
+  const bgGrd = ctx.createLinearGradient(0, 0, 0, H);
+  if (scene === 6) {
+    bgGrd.addColorStop(0, '#1a3a1a'); bgGrd.addColorStop(0.5, '#0f2a1a'); bgGrd.addColorStop(1, '#0a1a0e');
+  } else {
+    bgGrd.addColorStop(0, '#0d1b3e'); bgGrd.addColorStop(0.5, '#0a1528'); bgGrd.addColorStop(1, '#060d18');
+  }
+  ctx.fillStyle = bgGrd;
+  ctx.fillRect(0, 0, W, H);
+
+  // 装饰网格 (学校风格)
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 12; i++) {
+    const gy = ly(-1.6 + i * 0.3);
+    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+  }
+  for (let i = 0; i < 12; i++) {
+    const gx = lx(-1.8 + i * 0.33);
+    ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
+  }
+
+  // 星星
+  for (const s of bgStars) {
+    const tw = 0.25 + 0.75 * Math.abs(Math.sin(frame*s.speed + s.phase));
+    ctx.fillStyle = `rgba(255,255,255,${0.45*tw})`;
+    ctx.beginPath();
+    ctx.arc(lx(s.x), ly(s.y), Math.max(0.3, ls(0.003)*s.size*tw), 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // 樱花
+  if (frame % 8 === 0 && cherryBlossoms.length < 25) cherryBlossoms.push(spawnCherryBlossom());
+  for (let i = cherryBlossoms.length - 1; i >= 0; i--) {
+    const cb = cherryBlossoms[i];
+    cb.y += cb.vy; cb.x += cb.vx + Math.sin(cb.sway)*0.008; cb.sway += cb.swaySpeed;
+    cb.rotation += cb.rotSpeed;
+    if (cb.y < -2.2) { cherryBlossoms.splice(i,1); continue; }
+    ctx.save();
+    ctx.translate(lx(cb.x), ly(cb.y));
+    ctx.rotate(cb.rotation);
+    ctx.fillStyle = `rgba(255,183,197,0.6)`;
+    const ps = ls(cb.size);
+    // 五瓣樱花
+    for (let p = 0; p < 5; p++) {
+      const a = p * Math.PI*2/5;
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a)*ps*1.2, Math.sin(a)*ps*1.2, ps*0.7, ps*0.35, a, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(255,220,220,0.5)';
+    ctx.beginPath(); ctx.arc(0, 0, ps*0.3, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // 脉冲环
+  for (let i = pulseRings.length - 1; i >= 0; i--) {
+    const pr = pulseRings[i];
+    pr.r += 0.04; pr.alpha -= 0.035;
+    if (pr.alpha <= 0) { pulseRings.splice(i,1); continue; }
+    ctx.strokeStyle = hexToRgba(pr.color, pr.alpha*0.45);
+    ctx.lineWidth = ls(0.015);
+    ctx.beginPath(); ctx.arc(lx(pr.x), ly(pr.y), ls(pr.r), 0, Math.PI*2); ctx.stroke();
+  }
+
+  // 粒子
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy -= 0.0006; p.life -= p.decay;
+    if (p.life <= 0) { particles.splice(i,1); continue; }
+    ctx.fillStyle = hexToRgba(p.color, p.life);
+    ctx.beginPath();
+    ctx.arc(lx(p.x), ly(p.y), Math.max(0.3, ls(0.005)*p.size*p.life), 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // ==================== 场景 ====================
+  const age = frame - sceneStartFrame;
+
+  if (scene === 0) {
+    // 校门
+    ctx.textAlign = 'center';
+
+    // 校门拱形
+    const gateX = W/2, gateY = ly(0.25), gateW = ls(1.4), gateH = ls(0.9);
+    ctx.fillStyle = 'rgba(20,30,60,0.85)';
+    ctx.fillRect(gateX - gateW/2, gateY - gateH/2, gateW, gateH);
+    ctx.strokeStyle = hexToRgba(SCHOOL_GOLD, 0.5);
+    ctx.lineWidth = ls(0.02);
+    // 拱形
+    ctx.beginPath();
+    ctx.moveTo(gateX - gateW/2, gateY + gateH/2);
+    ctx.lineTo(gateX - gateW/2, gateY - gateH/6);
+    ctx.arcTo(gateX - gateW/2, gateY - gateH/2, gateX - gateW/2 + ls(0.15), gateY - gateH/2, ls(0.15));
+    ctx.lineTo(gateX + gateW/2 - ls(0.15), gateY - gateH/2);
+    ctx.arcTo(gateX + gateW/2, gateY - gateH/2, gateX + gateW/2, gateY - gateH/6, ls(0.15));
+    ctx.lineTo(gateX + gateW/2, gateY + gateH/2);
+    ctx.stroke();
+
+    // 校名牌匾
+    const plaqueH = ls(0.15);
+    ctx.fillStyle = '#2c1810';
+    ctx.fillRect(gateX - ls(0.55), gateY - gateH/2 - plaqueH - ls(0.02), ls(1.1), plaqueH);
+    ctx.strokeStyle = hexToRgba(SCHOOL_GOLD, 0.7);
+    ctx.lineWidth = ls(0.012);
+    ctx.strokeRect(gateX - ls(0.55), gateY - gateH/2 - plaqueH - ls(0.02), ls(1.1), plaqueH);
+
+    ctx.fillStyle = hexToRgba(SCHOOL_GOLD, 0.95);
+    ctx.font = `bold ${ls(0.15)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('文 昌 高 中', gateX, gateY - gateH/2 - plaqueH/2 + ls(0.02));
+
+    // 标题
+    for (let i = 2; i >= 0; i--) {
+      const off = (i-1)*ls(0.005);
+      ctx.fillStyle = i === 1 ? 'rgba(255,215,0,0.95)' : 'rgba(255,200,100,0.3)';
+      ctx.font = `bold ${ls(0.28)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      ctx.fillText('🏫 文昌高中 · 招生啦！', W/2 + off, ly(1.3) + off);
+    }
+
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = `${ls(0.12)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('百年名校 · 英才辈出', W/2, ly(1.0));
+
+    if (age > 30) {
+      const ha = 0.5 + 0.4 * Math.sin(frame*0.06);
+      ctx.fillStyle = `rgba(255,255,255,${ha})`;
+      ctx.font = `${ls(0.11)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      ctx.fillText('点击进入校园 →', W/2, ly(-1.3));
+    }
+    hintEl.textContent = '🏫 点击屏幕进入文昌高中';
+  }
+
+  else if (scene >= 1 && scene <= 5) {
+    ctx.textAlign = 'center';
+
+    const sceneTitles = [
+      '', // 占位
+      '📢 杨宇恒同学请注意！',
+      '📢 第二次警告！',
+      '📢 最后通牒！！',
+      '📢 终极召唤！！！',
+      '⚡ 杨宇恒，这是最后决定 ⚡'
+    ];
+    const sceneSubs = [
+      '',
+      '经文昌高中招生办研究决定',
+      '你已经被文昌高中盯上了',
+      '再不来你的名额要没了！',
+      '校长亲自等你来报到！',
+      '来文昌高中，改变人生！'
+    ];
+    const sceneReasons = [
+      '',
+      '理由：文昌高中有超豪华食堂 🍜',
+      '理由：文昌高中有全区最强师资 📚',
+      '理由：文昌高中有篮球场+游泳池 🏀',
+      '理由：文昌高中的学姐学长颜值爆表 😎',
+      '来了文昌，走上人生巅峰！'
+    ];
+
+    // 标题
+    for (let i = 2; i >= 0; i--) {
+      const off = (i-1)*ls(0.005);
+      ctx.fillStyle = i === 1 ? `rgba(255,215,0,0.9)` : `rgba(255,200,100,0.25)`;
+      ctx.font = `bold ${ls(0.2)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      ctx.fillText(sceneTitles[scene], W/2 + off, ly(1.3) + off);
+    }
+
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.font = `${ls(0.11)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText(sceneSubs[scene], W/2, ly(1.05));
+
+    // 理由卡片
+    const cardY = ly(0.15), cardW2 = ls(1.4), cardH2 = ls(0.35);
+    ctx.fillStyle = 'rgba(20,30,55,0.8)';
+    ctx.strokeStyle = hexToRgba(SCHOOL_GOLD, 0.35);
+    ctx.lineWidth = ls(0.01);
+    ctx.beginPath();
+    roundRect(W/2 - cardW2/2, cardY - cardH2/2, cardW2, cardH2, ls(0.035));
+    ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = `${ls(0.12)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText(sceneReasons[scene], W/2, cardY + ls(0.04));
+
+    // 进度条
+    const prog = (scene - 1) / 4;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(W/2 - ls(0.5), ly(-0.5), ls(1.0), ls(0.05));
+    const progGrd = ctx.createLinearGradient(W/2 - ls(0.5), 0, W/2 + ls(0.5), 0);
+    progGrd.addColorStop(0, SCHOOL_BLUE);
+    progGrd.addColorStop(0.5, SCHOOL_GOLD);
+    progGrd.addColorStop(1, SCHOOL_BLUE);
+    ctx.fillStyle = progGrd;
+    ctx.fillRect(W/2 - ls(0.5), ly(-0.5), ls(1.0) * prog, ls(0.05));
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = `${ls(0.07)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText(`入学进度: ${Math.floor(prog*100)}%`, W/2, ly(-0.62));
+
+    // 按钮
+    const glowVal = 0.5 + 0.4 * Math.abs(Math.sin(frame * 0.05));
+    const btnColor = scene === 5 ? '#ff6d00' : SCHOOL_BLUE;
+    drawSchoolButton(btnYesX, btnYesY, 0.52, 0.16, '同意来上学！✅', btnColor, 0.55 + glowVal*0.25, glowVal);
+    drawSchoolButton(btnNoX, btnNoY, 0.5, 0.15, '再想想...', '#555555', 0.4, 0);
+
+    const ha = 0.45 + 0.3 * Math.sin(frame*0.04);
+    ctx.fillStyle = `rgba(255,255,255,${ha})`;
+    ctx.font = `${ls(0.09)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText(`🎁 已获得 ${totalAgrees} 份奖励 | 点击同意领取下一份`, W/2, ly(-1.42));
+
+    if (scene === 5) {
+      hintEl.textContent = '🏆 终极大奖等你！最后一次选择！';
+    } else {
+      hintEl.textContent = `🎁 第${scene}份奖励待领取！快选同意！`;
+    }
+  }
+
+  else if (scene === 6) {
+    // 终极庆祝
+    ctx.textAlign = 'center';
+    const celebPulse = 0.6 + 0.4 * Math.sin(frame*0.04);
+    for (let i = 0; i < 14; i++) {
+      const angle = (i/14)*Math.PI*2 + frame*0.012;
+      ctx.strokeStyle = `rgba(255,215,0,${0.07*celebPulse})`;
+      ctx.lineWidth = ls(0.012);
+      ctx.beginPath();
+      ctx.moveTo(W/2 + Math.cos(angle)*ls(0.25), H/2 - ls(0.05) + Math.sin(angle)*ls(0.25));
+      ctx.lineTo(W/2 + Math.cos(angle)*ls(1.3), H/2 - ls(0.05) + Math.sin(angle)*ls(1.3));
+      ctx.stroke();
+    }
+
+    const finalTitles = [
+      '🎉 恭喜杨宇恒同学！ 🎉',
+      '正式被文昌高中录取！',
+      '🎓 三年后清北见！',
+      '🏆 未来可期！🏆'
+    ];
+    const ftIdx = Math.min(finalTitles.length-1, Math.floor(age/80));
+    for (let i = 3; i >= 0; i--) {
+      const off = i===0?0:(i%2===0?1:-1)*ls(0.005)*(i+1);
+      ctx.fillStyle = i===0?'rgba(255,215,0,0.95)':'rgba(255,150,50,0.3)';
+      ctx.font = `bold ${ls(0.26)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      if(i===0){ctx.shadowColor='rgba(255,215,0,0.6)';ctx.shadowBlur=ls(0.1);}
+      else ctx.shadowBlur=0;
+      ctx.fillText(finalTitles[ftIdx], W/2+off, ly(1.2)+off);
+    }
+    ctx.shadowBlur=0;
+
+    ctx.fillStyle='rgba(255,255,255,0.8)';
+    ctx.font=`${ls(0.13)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('🏫 文昌高中 · 欢迎你的加入！', W/2, ly(0.8));
+
+    if(frame%12===0) spawnParticles((Math.random()-0.5)*1.2,(Math.random()-0.5)*0.8, Math.random()<0.5?SCHOOL_GOLD:SCHOOL_BLUE,8);
+    const ha=0.5+0.3*Math.sin(frame*0.04);
+    ctx.fillStyle=`rgba(255,255,255,${ha})`;ctx.font=`${ls(0.1)}px "Microsoft YaHei","PingFang SC",sans-serif`;
+    ctx.fillText('点击继续庆祝！🎉',W/2,ly(-1.4));
+    hintEl.textContent = `🎓 已领取全部 ${totalAgrees} 份奖励 · 文昌高中欢迎杨宇恒！`;
+  }
+
+  requestAnimationFrame(render);
+}
+
+spawnParticles(0, 0.2, SCHOOL_GOLD, 20);
+hintEl.textContent = '🏫 点击屏幕开始 →';
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
